@@ -1,0 +1,10 @@
+## Interface: 70300
+## Title: Method Alt Manager
+## Author: Qoning
+## Version: v1
+## Notes: This is a note
+## SavedVariables: MethodAltManagerDB
+
+MethodAltManager.lua
+
+
