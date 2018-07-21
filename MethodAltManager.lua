@@ -122,7 +122,6 @@ do
 	
 	main_frame:RegisterEvent("ADDON_LOADED");
 	main_frame:RegisterEvent("PLAYER_LOGIN");
-	main_frame:RegisterEvent("PLAYER_LOGOUT");
 	main_frame:RegisterEvent("QUEST_TURNED_IN");
 	main_frame:RegisterEvent("BAG_UPDATE_DELAYED");
 	main_frame:RegisterEvent("ARTIFACT_XP_UPDATE");
@@ -140,7 +139,7 @@ do
 		if event == "PLAYER_LOGIN" then
 			AltManager:OnLogin();
 		end
-		if event == "PLAYER_LOGOUT" or event == "ARTIFACT_XP_UPDATE" then
+		if event == "ARTIFACT_XP_UPDATE" then
 			local data = AltManager:CollectData();
 			AltManager:StoreData(data);
 		end
@@ -307,7 +306,6 @@ function AltManager:StoreData(data)
 			update = true;
 		end
 	end
-	
 	if not update then
 		db.data[guid] = data;
 		db.alts = db.alts + 1;
@@ -319,7 +317,6 @@ function AltManager:StoreData(data)
 end
 
 function AltManager:CollectData(do_artifact)
-
 	
 	if UnitLevel('player') < min_level then return end;
 
@@ -347,8 +344,8 @@ function AltManager:CollectData(do_artifact)
 	end
 	
 	for k,v in pairs(dungeons) do
-		C_ChallengeMode.RequestMapInfo(k);
-		local _, t, l = C_ChallengeMode.GetMapPlayerStats(k);
+		C_ChallengeMode.GetMapUIInfo(k);
+		local _, t, l = C_ChallengeMode.RequestLeaders(k);
 		if l and l > highest_mplus then
 			highest_mplus = l;
 		end
@@ -375,11 +372,11 @@ function AltManager:CollectData(do_artifact)
 				end
 				self.main_frame.scan_tooltip:Hide();
 				--local mapname = C_ChallengeMode.GetMapInfo(info[1]);
-				dungeon = tonumber(info[1])
+				dungeon = tonumber(info[2])
 				if not dungeon then print("MethodAltManager - Parse Failure, please let Qoning know that this happened."); end
-				level = tonumber(info[2])
+				level = tonumber(info[3])
 				if not level then print("MethodAltManager - Parse Failure, please let Qoning know that this happened."); end
-				expire = tonumber(info[10])
+				expire = tonumber(info[4])
 				keystone_found = true;
 			end
 		end
@@ -398,7 +395,7 @@ function AltManager:CollectData(do_artifact)
 		if (not ArtifactFrame or not ArtifactFrame:IsShown()) then
 			SocketInventoryItem(INVSLOT_MAINHAND);
 		end
-		artifact_level = C_ArtifactUI.GetArtifactKnowledgeLevel()
+		_,_,_,_,_, artifact_level = C_ArtifactUI.GetEquippedArtifactInfo()
 		-- close artifact
 		if not is_open and ArtifactFrame and ArtifactFrame:IsShown() and C_ArtifactUI.IsViewedArtifactEquipped() then
 			C_ArtifactUI.Clear();
@@ -481,37 +478,30 @@ function AltManager:CollectData(do_artifact)
 	local saves = GetNumSavedInstances();
 	for i = 1, saves do
 		local name, _, reset, _, _, _, _, _, _, difficulty, bosses, killed_bosses = GetSavedInstanceInfo(i);
-		-- nightbane
-		if name == GetMapNameByID(1100) and reset > 0 then
+		if name == C_Map.GetMapInfo(794) and reset > 0 then -- Karazhan Nightbane
 			for j = 1, 20 do
 				local boss, _, killed = GetSavedInstanceEncounterInfo(i, j);
 				if boss == "Nightbane" then
 					nightbane_save = killed;
 				end
 			end
-		end
-		-- check for raids
-		if name == GetMapNameByID(1094) and reset > 0 then
+		elseif name == C_Map.GetMapInfo(777) and reset > 0 then -- Emerald Nightmare
 			if difficulty == "Normal" then en_normal = killed_bosses end
 			if difficulty == "Heroic" then en_heroic = killed_bosses end
 			if difficulty == "Mythic" then en_mythic = killed_bosses end
-		end
-		if name == GetMapNameByID(1114) and reset > 0 then
+		elseif name == C_Map.GetMapInfo(806) and reset > 0 then -- Trial of Valor
 			if difficulty == "Normal" then tov_normal = killed_bosses end
 			if difficulty == "Heroic" then tov_heroic = killed_bosses end
 			if difficulty == "Mythic" then tov_mythic = killed_bosses end
-		end
-		if name == GetMapNameByID(1088) and reset > 0 then
+		elseif name == C_Map.GetMapInfo(764) and reset > 0 then -- Nighthold
 			if difficulty == "Normal" then nh_normal = killed_bosses end
 			if difficulty == "Heroic" then nh_heroic = killed_bosses end
 			if difficulty == "Mythic" then nh_mythic = killed_bosses end
-		end
-		if name == GetMapNameByID(1147) and reset > 0 then
+		elseif name == C_Map.GetMapInfo(850) and reset > 0 then -- Tomb of Sargeras
 			if difficulty == "Normal" then tos_normal = killed_bosses end
 			if difficulty == "Heroic" then tos_heroic = killed_bosses end
 			if difficulty == "Mythic" then tos_mythic = killed_bosses end
-		end
-		if name == GetMapNameByID(1188) and reset > 0 then
+		elseif name == C_Map.GetMapInfo(909) and reset > 0 then -- Antorus the Burning Throne
 			if difficulty == "Normal" then antorus_normal = killed_bosses end
 			if difficulty == "Heroic" then antorus_heroic = killed_bosses end
 			if difficulty == "Mythic" then antorus_mythic = killed_bosses end
@@ -605,8 +595,7 @@ function AltManager:CollectData(do_artifact)
 	char_table.wakening_essence = wakening_essence;
 	char_table.is_depleted = depleted;
 	char_table.expires = self:GetNextWeeklyResetTime();
-	
-	
+
 	return char_table;
 end
 
@@ -1020,7 +1009,7 @@ function AltManager:GetNextDailyResetTime()
 end
 
 function AltManager:GetServerOffset()
-	local serverDay = CalendarGetDate() - 1 -- 1-based starts on Sun
+	local serverDay = C_Calendar.GetDate()['weekday'] - 1 -- 1-based starts on Sun
 	local localDay = tonumber(date("%w")) -- 0-based starts on Sun
 	local serverHour, serverMinute = GetGameTime()
 	local localHour, localMinute = tonumber(date("%H")), tonumber(date("%M"))
@@ -1061,8 +1050,8 @@ function AltManager:GetRegion()
 end
 
 function AltManager:GetWoWDate()
-	local hour = tonumber(date("%H"));
-	local day = CalendarGetDate();
+	local hour = tonumber(tonumber(date("%H")));
+	local day = tonumber(C_Calendar.GetDate()["weekday"]);
 	return day, hour;
 end
 
