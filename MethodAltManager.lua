@@ -344,8 +344,7 @@ function AltManager:CollectData(do_artifact)
 	end
 	
 	for k,v in pairs(dungeons) do
-		C_ChallengeMode.GetMapUIInfo(k);
-		local _, t, l = C_ChallengeMode.RequestLeaders(k);
+		local t, l = C_MythicPlus.GetWeeklyBestForMap(k);
 		if l and l > highest_mplus then
 			highest_mplus = l;
 		end
