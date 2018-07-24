@@ -485,23 +485,23 @@ function AltManager:CollectData(do_artifact)
 					nightbane_save = killed;
 				end
 			end
-		elseif name == C_Map.GetMapInfo(777) and reset > 0 then -- Emerald Nightmare
+		elseif name == C_Map.GetMapInfo(777).name and reset > 0 then -- Emerald Nightmare
 			if difficulty == "Normal" then en_normal = killed_bosses end
 			if difficulty == "Heroic" then en_heroic = killed_bosses end
 			if difficulty == "Mythic" then en_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(806) and reset > 0 then -- Trial of Valor
+		elseif name == C_Map.GetMapInfo(806).name and reset > 0 then -- Trial of Valor
 			if difficulty == "Normal" then tov_normal = killed_bosses end
 			if difficulty == "Heroic" then tov_heroic = killed_bosses end
 			if difficulty == "Mythic" then tov_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(764) and reset > 0 then -- Nighthold
+		elseif name == C_Map.GetMapInfo(764).name and reset > 0 then -- Nighthold
 			if difficulty == "Normal" then nh_normal = killed_bosses end
 			if difficulty == "Heroic" then nh_heroic = killed_bosses end
 			if difficulty == "Mythic" then nh_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(850) and reset > 0 then -- Tomb of Sargeras
+		elseif name == C_Map.GetMapInfo(850).name and reset > 0 then -- Tomb of Sargeras
 			if difficulty == "Normal" then tos_normal = killed_bosses end
 			if difficulty == "Heroic" then tos_heroic = killed_bosses end
 			if difficulty == "Mythic" then tos_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(909) and reset > 0 then -- Antorus the Burning Throne
+		elseif name == C_Map.GetMapInfo(909).name and reset > 0 then -- Antorus the Burning Throne
 			if difficulty == "Normal" then antorus_normal = killed_bosses end
 			if difficulty == "Heroic" then antorus_heroic = killed_bosses end
 			if difficulty == "Mythic" then antorus_mythic = killed_bosses end
