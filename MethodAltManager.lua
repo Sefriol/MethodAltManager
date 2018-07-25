@@ -7,13 +7,13 @@ _G["AltManager"] = AltManager;
 
 --local sizey = 200;
 local sizey = 220;
-local instances_y_add = 100;
+local instances_y_add = 1;
 local xoffset = 0;
 local yoffset = 150;
 local alpha = 1;
 local addon = "MethodAltManager";
 local numel = table.getn;
-
+local Aurora = _G.Aurora
 local per_alt_x = 120;
 
 local min_x_size = 300;
@@ -37,19 +37,9 @@ local max_ak = 40
 
 local VERSION = "1.2.1"
 
--- C_ChallengeMode.GetMapTable
---local dungeons = {[1501] = "BRH",
---				  [1571] = "CoS",
---				  [1466] = "DHT",
---				  [1456] = "EoA",
---				  [1477] = "HoV",
---				  [1492] = "MoS",
---				  [1458] = "NL",
---				  [1516] = "Arcway",
---				  [1493] = "VotW",
---				  [1544] = "VH"
---				 };
+local favoriteTier = EJ_GetNumTiers()
 
+-- Legion backup incase API call fails.
 local dungeons = {[199] = "BRH",
 				  [210] = "CoS",
 				  [198] = "DHT",
@@ -66,6 +56,7 @@ local dungeons = {[199] = "BRH",
 				  [239] = "Seat"
 				 };
 
+local raids = {}
 
 SLASH_METHODALTMANAGER1 = "/mam";
 SLASH_METHODALTMANAGER2 = "/alts";
@@ -162,6 +153,7 @@ end
 
 -- because of guid...
 function AltManager:OnLogin()
+	self:GenerateDungeonTable()
 	self:ValidateReset();
 	self:StoreData(self:CollectData());
 	
@@ -183,6 +175,14 @@ function AltManager:OnLoad()
 	MethodAltManagerDB = MethodAltManagerDB or self:InitDB();
 
 	self.addon_loaded = true
+
+	C_MythicPlus.RequestRewards();
+	C_MythicPlus.RequestCurrentAffixes();
+	C_MythicPlus.RequestMapInfo();
+	for k,v in pairs(dungeons) do
+		-- request info in advance
+		C_MythicPlus.RequestMapInfo(k);
+	end
 end
 
 function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offset, label, justify)
@@ -210,6 +210,54 @@ function AltManager:Keyset()
 	return keyset
 end
 
+-- Use API to generate dungeons-table
+function AltManager:GenerateDungeonTable()
+	local tempMapTable = {};
+	local emptyTable = true;
+	local APITable = C_ChallengeMode.GetMapTable();
+	for _, k in pairs(APITable) do
+		local name = C_ChallengeMode.GetMapUIInfo(k);
+		local shortHand = name:gsub("(%a)([%w_']*)", "%1"):gsub("%s+", "");
+		table.insert(tempMapTable, k, shortHand);
+		emptyTable = false;
+	end
+	if not emptyTable then
+		dungeons = tempMapTable;
+	end
+end
+
+function AltManager:GenerateRaidData()
+	-- Select the latest tier
+	EJ_SelectTier(favoriteTier);
+	local raidData = {}
+	if EJ_GetCurrentTier() == favoriteTier then
+		local raid = {}
+		local instanceIdx = 1
+		local bossIdx = 1;
+		-- Get raid instance from latest tier
+		local instanceID, instanceName = EJ_GetInstanceByIndex(instanceIdx, true)
+		while instanceID do
+			raid["id"] = instanceID;
+			raid["label"] = instanceName;
+			raid["order"] = instanceIdx
+			raid["killed"] = nil;
+			local _, _, bossID = EJ_GetEncounterInfoByIndex(bossIdx, instanceID);
+			while bossID do
+				bossIdx = bossIdx + 1;
+				_, _, bossID = EJ_GetEncounterInfoByIndex(bossIdx, instanceID);
+			end
+			raid["bosses"] = bossIdx - 1
+			raid["data"] = function(alt_data, i) return self:MakeRaidString(alt_data.savedins, i) end
+			raidData[instanceID] = raid;
+			raid = {}
+			bossIdx = 1
+			instanceIdx = instanceIdx + 1;
+			instanceID, instanceName = EJ_GetInstanceByIndex(instanceIdx, true)
+		end
+	end
+	raids[favoriteTier] = raidData
+end
+
 function AltManager:ValidateReset()
 	local db = MethodAltManagerDB
 	if not db then return end;
@@ -231,28 +279,6 @@ function AltManager:ValidateReset()
 			char_table.highest_mplus = 0;
 			char_table.is_depleted = false;
 			char_table.expires = self:GetNextWeeklyResetTime();
-			
-			char_table.nh_normal = 0;
-			char_table.nh_heroic = 0;
-			char_table.nh_mythic = 0;
-			char_table.en_normal = 0;
-			char_table.en_heroic = 0;
-			char_table.en_mythic = 0;
-			char_table.tov_normal = 0;
-			char_table.tov_heroic = 0;
-			char_table.tov_mythic = 0;
-			char_table.tos_normal = 0;
-			char_table.tos_heroic = 0;
-			char_table.tos_mythic = 0;
-			char_table.antorus_normal = 0;
-			char_table.antorus_heroic = 0;
-			char_table.antorus_mythic = 0;
-
-			char_table.nh_lfr = 0;
-			char_table.en_lfr = 0;
-			char_table.tov_lfr = 0;
-			char_table.tos_lfr = 0;
-			char_table.antorus_lfr = 0;
 		end
 	end
 end
@@ -317,7 +343,7 @@ function AltManager:StoreData(data)
 end
 
 function AltManager:CollectData(do_artifact)
-	
+
 	if UnitLevel('player') < min_level then return end;
 
 	if do_artifact == nil then
@@ -342,13 +368,11 @@ function AltManager:CollectData(do_artifact)
 	if MethodAltManagerDB and MethodAltManagerDB.data then
 		mine_old = MethodAltManagerDB.data[guid];
 	end
-	
-	for k,v in pairs(dungeons) do
-		C_MythicPlus.RequestRewards();
-		local l, cR, nR = C_MythicPlus.GetWeeklyChestRewardLevel();
-		if l and l > highest_mplus then
-			highest_mplus = l;
-		end
+
+	C_MythicPlus.RequestRewards();
+	local l, cR, nR = C_MythicPlus.GetWeeklyChestRewardLevel();
+	if l and l > highest_mplus then
+		highest_mplus = l;
 	end
 	
 	-- find keystone
@@ -404,6 +428,7 @@ function AltManager:CollectData(do_artifact)
 
 	-- order resources
 	local _, order_resources = GetCurrencyInfo(1220);
+	local _, war_resources = GetCurrencyInfo(1560);
 	local _, veiled_argunite = GetCurrencyInfo(1508);
 	local _, wakening_essence = GetCurrencyInfo(1533);
 	
@@ -442,6 +467,7 @@ function AltManager:CollectData(do_artifact)
 	end
 	
 	_, seals = GetCurrencyInfo(1273);
+	--_, seals = GetCurrencyInfo(1580);
 	
 	seals_bought = 0
 	local gold_1 = IsQuestFlaggedCompleted(43895)
@@ -466,83 +492,28 @@ function AltManager:CollectData(do_artifact)
 	
 	local class_hall_seal = IsQuestFlaggedCompleted(43510)
 	if class_hall_seal then seals_bought = seals_bought + 1 end
-	
-
-	local nh_lfr, nh_normal, nh_heroic, nh_mythic = 0;
-	local tov_lfr, tov_normal, tov_heroic, tov_mythic = 0;
-	local en_lfr, en_normal, en_heroic, en_mythic = 0;
-	local tos_lfr, tos_normal, tos_heroic, tos_mythic = 0;
-	local antorus_lfr, antorus_normal, antorus_heroic, antorus_mythic = 0;
 
 	local nightbane_save = false;
 	local saves = GetNumSavedInstances();
+	local char_table = {}
+	char_table.savedins = {}
 	for i = 1, saves do
-		local name, _, reset, _, _, _, _, _, _, difficulty, bosses, killed_bosses = GetSavedInstanceInfo(i);
-		if name == C_Map.GetMapInfo(794) and reset > 0 then -- Karazhan Nightbane
-			for j = 1, 20 do
-				local boss, _, killed = GetSavedInstanceEncounterInfo(i, j);
-				if boss == "Nightbane" then
-					nightbane_save = killed;
-				end
-			end
-		elseif name == C_Map.GetMapInfo(777).name and reset > 0 then -- Emerald Nightmare
-			if difficulty == "Normal" then en_normal = killed_bosses end
-			if difficulty == "Heroic" then en_heroic = killed_bosses end
-			if difficulty == "Mythic" then en_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(806).name and reset > 0 then -- Trial of Valor
-			if difficulty == "Normal" then tov_normal = killed_bosses end
-			if difficulty == "Heroic" then tov_heroic = killed_bosses end
-			if difficulty == "Mythic" then tov_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(764).name and reset > 0 then -- Nighthold
-			if difficulty == "Normal" then nh_normal = killed_bosses end
-			if difficulty == "Heroic" then nh_heroic = killed_bosses end
-			if difficulty == "Mythic" then nh_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(850).name and reset > 0 then -- Tomb of Sargeras
-			if difficulty == "Normal" then tos_normal = killed_bosses end
-			if difficulty == "Heroic" then tos_heroic = killed_bosses end
-			if difficulty == "Mythic" then tos_mythic = killed_bosses end
-		elseif name == C_Map.GetMapInfo(909).name and reset > 0 then -- Antorus the Burning Throne
-			if difficulty == "Normal" then antorus_normal = killed_bosses end
-			if difficulty == "Heroic" then antorus_heroic = killed_bosses end
-			if difficulty == "Mythic" then antorus_mythic = killed_bosses end
+		local instance = {}
+		local name, iID, reset, difficultyID, _, _, instanceIDMostSig, isRaid, _, difficulty, bosses, killed_bosses = GetSavedInstanceInfo(i);
+		if isRaid and reset > 0 then
+			char_table.savedins[name] = char_table.savedins[name] or {}
+			char_table.savedins[name][difficultyID] = {
+				difficultyID,
+				difficulty,
+				bosses,
+				killed_bosses
+			}
 		end
 	end
-
-	local nh_lfr_id = {1293, 1292, 1291, 1290};
-	local tov_lfr_id = {1411};
-	local en_lfr_id = {1288, 1287, 1289};
-	local tos_lfr_id = {1494, 1495, 1496, 1497};
-	local antorus_lfr_id = {1610, 1611, 1612, 1613};
-
-	-- used to find: for i = 1,2000 do if(GetLFGDungeonInfo(i)) then print(i, GetLFGDungeonInfo(i)) end end
-
-	for _, v in pairs(nh_lfr_id) do
-		local _, killed = GetLFGDungeonNumEncounters(v);
-		nh_lfr = nh_lfr + killed;
-	end
-	for _, v in pairs(tov_lfr_id) do
-		local _, killed = GetLFGDungeonNumEncounters(v);
-		tov_lfr = tov_lfr + killed;
-	end
-	for _, v in pairs(en_lfr_id) do
-		local _, killed = GetLFGDungeonNumEncounters(v);
-		en_lfr = en_lfr + killed;
-	end
-	for _, v in pairs(tos_lfr_id) do
-		local _, killed = GetLFGDungeonNumEncounters(v);
-		tos_lfr = tos_lfr + killed;
-	end
-		for _, v in pairs(antorus_lfr_id) do
-		local _, killed = GetLFGDungeonNumEncounters(v);
-		antorus_lfr = antorus_lfr + killed;
-	end
-
 	
 	local _, ilevel = GetAverageItemLevel();
 
 	-- store data into a table
-
-	local char_table = {}
 	
 	char_table.guid = UnitGUID('player');
 	char_table.name = name;
@@ -565,37 +536,12 @@ function AltManager:CollectData(do_artifact)
 	char_table.dungeon = dungeon;
 	char_table.level = level;
 	char_table.highest_mplus = highest_mplus;
-	--remove nightbane for now
-	--char_table.nightbane = nightbane_save;
-
-	char_table.nh_lfr = nh_lfr;
-	char_table.en_lfr = en_lfr;
-	char_table.tov_lfr = tov_lfr;
-	char_table.tos_lfr = tos_lfr;
-	char_table.antorus_lfr = antorus_lfr;
-
-	char_table.nh_normal = nh_normal;
-	char_table.nh_heroic = nh_heroic;
-	char_table.nh_mythic = nh_mythic;
-	char_table.en_normal = en_normal;
-	char_table.en_heroic = en_heroic;
-	char_table.en_mythic = en_mythic;
-	char_table.tov_normal = tov_normal;
-	char_table.tov_heroic = tov_heroic;
-	char_table.tov_mythic = tov_mythic;
-	char_table.tos_normal = tos_normal;
-	char_table.tos_heroic = tos_heroic;
-	char_table.tos_mythic = tos_mythic;
-	char_table.antorus_normal = antorus_normal;
-	char_table.antorus_heroic = antorus_heroic;
-	char_table.antorus_mythic = antorus_mythic;
 
 	char_table.order_resources = order_resources;
 	char_table.veiled_argunite = veiled_argunite;
 	char_table.wakening_essence = wakening_essence;
 	char_table.is_depleted = depleted;
 	char_table.expires = self:GetNextWeeklyResetTime();
-
 	return char_table;
 end
 
@@ -628,7 +574,14 @@ function AltManager:PopulateStrings()
 		for column_iden, column in spairs(self.columns_table, function(t, a, b) return t[a].order < t[b].order end) do
 			-- only display data with values
 			if type(column.data) == "function" then
-				local current_row = label_columns[i] or self:CreateFontFrame(self.main_frame, per_alt_x, column.font_height or font_height, anchor_frame, -(i - 1) * font_height, column.data(alt_data), "CENTER");
+				local current_row = label_columns[i] or self:CreateFontFrame(
+					self.main_frame,
+					per_alt_x,
+					column.font_height or font_height,
+					anchor_frame,
+					-(i - 1) * font_height,
+					column.data(alt_data, i),
+					"CENTER");
 				-- insert it into storage if just created
 				if not self.main_frame.alt_columns[alt].label_columns[i] then
 					self.main_frame.alt_columns[alt].label_columns[i] = current_row;
@@ -637,7 +590,7 @@ function AltManager:PopulateStrings()
 					local color = column.color(alt_data)
 					current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1);
 				end
-				current_row:SetText(column.data(alt_data))
+				current_row:SetText(column.data(alt_data, i))
 				if column.font then
 					current_row:GetFontString():SetFont(column.font, 8)
 				else
@@ -658,10 +611,11 @@ function AltManager:CreateMenu()
 
 	-- Close button
 	self.main_frame.closeButton = CreateFrame("Button", "CloseButton", self.main_frame, "UIPanelCloseButton");
+	if Aurora then Aurora.Skin.UIPanelCloseButton(self.main_frame.closeButton) end
 	self.main_frame.closeButton:ClearAllPoints()
-	self.main_frame.closeButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT", -10, -2);
+	self.main_frame.closeButton:SetFrameLevel(self.main_frame:GetFrameLevel() + 2);
+	self.main_frame.closeButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT",Aurora and -5 or -10, Aurora and 5 or -2);
 	self.main_frame.closeButton:SetScript("OnClick", function() AltManager:HideInterface(); end);
-	--self.main_frame.closeButton:SetSize(32, h);
 
 	local column_table = {
 		name = {
@@ -701,11 +655,6 @@ function AltManager:CreateMenu()
 		--	label = artifact_reaserch_label,
 		--	data = function(alt_data) return tostring(alt_data.artifact_level) end,
 		--},
-		--next_research = {
-		--	order = 8,
-		--	label = artifact_research_time_label,
-		--	data = function(alt_data) local remaining = alt_data.next_research - time(); if remaining < 0 then remaining = 0; end return alt_data.artifact_level < max_ak and self:TimeString(remaining) or "Max" end,
-		--},
 		order_resources = {
 			order = 9,
 			label = resources_label,
@@ -729,63 +678,11 @@ function AltManager:CreateMenu()
 			order = 11,
 			data = "unroll",
 			name = "Instances >>",
-			unroll_function = function(button, my_rows)
+			unroll_function = function(button)
 				self.instances_unroll = self.instances_unroll or {};
 				self.instances_unroll.state = self.instances_unroll.state or "closed";
 				if self.instances_unroll.state == "closed" then
-					-- do unroll
-					self.instances_unroll.unroll_frame = self.instances_unroll.unroll_frame or CreateFrame("Button", nil, self.main_frame);
-					self.instances_unroll.unroll_frame:SetSize(per_alt_x, instances_y_add);
-					self.instances_unroll.unroll_frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.lowest_point - 10);
-					self.instances_unroll.unroll_frame:Show();
-					
-					local font_height = 20;
-					-- create the rows for the unroll
-					if not self.instances_unroll.labels then
-						self.instances_unroll.labels = {};
-						local i = 1
-						for row_iden, row in spairs(my_rows, function(t, a, b) return t[a].order < t[b].order end) do
-							if row.label then
-								local label_row = self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, font_height, self.instances_unroll.unroll_frame, -(i-1)*font_height, row.label..":", "RIGHT");
-								table.insert(self.instances_unroll.labels, label_row)
-							end
-							i = i + 1
-						end
-					end
-					
-					-- populate it for alts
-					self.instances_unroll.alt_columns = self.instances_unroll.alt_columns or {};
-					local alt = 0
-					local db = MethodAltManagerDB;
-					for alt_guid, alt_data in spairs(db.data, function(t, a, b) return t[a].ilevel > t[b].ilevel end) do
-						alt = alt + 1
-						-- create the frame to which all the fontstrings anchor
-						local anchor_frame = self.instances_unroll.alt_columns[alt] or CreateFrame("Button", nil, self.instances_unroll.unroll_frame);
-						if not self.instances_unroll.alt_columns[alt] then
-							self.instances_unroll.alt_columns[alt] = anchor_frame;
-						end
-						anchor_frame:SetPoint("TOPLEFT", self.instances_unroll.unroll_frame, "TOPLEFT", per_alt_x * alt, -1);
-						anchor_frame:SetSize(per_alt_x, instances_y_add);
-						-- init table for fontstring storage
-						self.instances_unroll.alt_columns[alt].label_columns = self.instances_unroll.alt_columns[alt].label_columns or {};
-						local label_columns = self.instances_unroll.alt_columns[alt].label_columns;
-						-- create / fill fontstrings
-						local i = 1;
-						for column_iden, column in spairs(my_rows, function(t, a, b) return t[a].order < t[b].order end) do
-							local current_row = label_columns[i] or self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, column.font_height or font_height, anchor_frame, -(i - 1) * font_height, column.data(alt_data), "CENTER");
-							-- insert it into storage if just created
-							if not self.instances_unroll.alt_columns[alt].label_columns[i] then
-								self.instances_unroll.alt_columns[alt].label_columns[i] = current_row;
-							end
-							current_row:SetText(column.data(alt_data))
-							i = i + 1
-						end
-					end
-
-					-- fixup the background
-					self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey + instances_y_add);
-					self.main_frame.background:SetAllPoints();
-
+					self:CreateUnrollFrame()
 					button:SetText("Instances <<");
 					self.instances_unroll.state = "open";
 				else
@@ -796,34 +693,7 @@ function AltManager:CreateMenu()
 					button:SetText("Instances >>");
 					self.instances_unroll.state = "closed";
 				end
-			end,
-			rows = {
-				tomb_of_sargeras = {
-					order = 1,
-					label = "Tomb of Sargeras",
-					data = function(alt_data) return self:MakeRaidString(alt_data.tos_lfr, alt_data.tos_normal, alt_data.tos_heroic, alt_data.tos_mythic) end
-				},
-				nighthold = {
-					order = 2,
-					label = "Nighthold",
-					data = function(alt_data) return self:MakeRaidString(alt_data.nh_lfr, alt_data.nh_normal, alt_data.nh_heroic, alt_data.nh_mythic) end
-				},
-				trial_of_valor = {
-					order = 3,
-					label = "Trial of Valor",
-					data = function(alt_data) return self:MakeRaidString(alt_data.tov_lfr, alt_data.tov_normal, alt_data.tov_heroic, alt_data.tov_mythic) end
-				},
-				emerald_nightmare = {
-					order = 4,
-					label = "Emerald Nightmare",
-					data = function(alt_data) return self:MakeRaidString(alt_data.en_lfr, alt_data.en_normal, alt_data.en_heroic, alt_data.en_mythic) end
-				},
-				antorus_raid = {
-					order = 0.5,
-					label = "Antorus",
-					data = function(alt_data) return self:MakeRaidString(alt_data.antorus_lfr, alt_data.antorus_normal, alt_data.antorus_heroic, alt_data.antorus_mythic) end
-				}
-			}
+			end
 		}
 	}
 	self.columns_table = column_table;
@@ -843,34 +713,186 @@ function AltManager:CreateMenu()
 		end
 		if row.data == "unroll" then
 			-- create a button that will unroll it
-			local unroll_button = CreateFrame("Button", "UnrollButton", self.main_frame, "UIPanelButtonTemplate");
+			local unroll_button = CreateFrame("Button", nil, self.main_frame, "UIPanelButtonTemplate");
 			unroll_button:SetText(row.name);
-			unroll_button:SetFrameStrata("HIGH");
-			--unroll_button:SetFrameLevel(self.main_frame:GetFrameLevel() - 1);
+			unroll_button:SetFrameLevel(self.main_frame:GetFrameLevel() + 2);
 			unroll_button:SetSize(unroll_button:GetTextWidth() + 20, 25);
 			unroll_button:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPLEFT", 4 + per_alt_x, -(i-1)*font_height-10);
-			unroll_button:SetScript("OnClick", function() row.unroll_function(unroll_button, row.rows) end);
+			
+			if Aurora then Aurora.Skin.UIPanelButtonTemplate(unroll_button) end
+			unroll_button:SetScript("OnClick", function() row.unroll_function(unroll_button) end);
+
+			local tierDropDown = CreateFrame("Frame", nil, self.main_frame, "UIDropDownMenuTemplate")
+			if Aurora then Aurora.Skin.UIDropDownMenuTemplate(tierDropDown) end
+			-- obj:SetPoint(point, relativeTo, relativePoint, ofsx, ofsy);
+			tierDropDown:SetPoint("LEFT", unroll_button, "RIGHT");
+			UIDropDownMenu_SetWidth(tierDropDown, 130) -- Use in place of dropDown:SetWidth
+			UIDropDownMenu_SetText(tierDropDown, EJ_GetTierInfo(favoriteTier))
+			UIDropDownMenu_Initialize(tierDropDown, AltManagerDropDown_Menu)
 			self.main_frame.lowest_point = -(i-1)*font_height-10;
+
+			function tierDropDown:SetTier(newValue)
+				-- Change Encounter Journal to correct expansion
+				favoriteTier = newValue
+				EJ_SelectTier(newValue)
+
+				-- Set correct value to dropdown menu
+				UIDropDownMenu_SetText(tierDropDown, EJ_GetTierInfo(favoriteTier))
+				-- Close the entire menu
+				CloseDropDownMenus();
+
+				-- Update unroll
+				AltManager.instances_unroll = AltManager.instances_unroll or {};
+				AltManager.instances_unroll.state = "closed";
+				row.unroll_function(unroll_button)
+			end
 		end
 		i = i + 1
 	end
-
 end
 
-function AltManager:MakeRaidString(lfr, normal, heroic, mythic)
-	if not normal then normal = 0 end
-	if not heroic then heroic = 0 end
-	if not mythic then mythic = 0 end
-	if not lfr then lfr = 0 end
+function AltManager:CreateUnrollFrame()
+	local my_rows = nil;
+	if (raids[favoriteTier]) then
+		my_rows = raids[favoriteTier];
+	else
+		self:GenerateRaidData();
+		my_rows = raids[favoriteTier];
+	end
+	-- do unroll
+	self.instances_unroll.unroll_frame = self.instances_unroll.unroll_frame or CreateFrame("Button", nil, self.main_frame);
+	self.instances_unroll.unroll_frame:SetSize(per_alt_x, instances_y_add*20);
+	self.instances_unroll.unroll_frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.lowest_point - 10);
+	self.instances_unroll.unroll_frame:Show();
+	
+	local font_height = 20;
+	-- create the rows for the unroll
+	if not self.instances_unroll.labels then
+		self.instances_unroll.labels = {};
+		local i = 1
+		for row_iden, row in spairs(my_rows, function(t, a, b) return t[a].order < t[b].order end) do
+			if row.label then
+				local label_row = self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, font_height, self.instances_unroll.unroll_frame, -(i-1)*font_height, row.label, "RIGHT");
+				table.insert(self.instances_unroll.labels, label_row)
+			end
+			i = i + 1
+		end
+		instances_y_add = i
+	else
+		local i = 1
+		local idx, v = nil,nil
+		for row_iden, row in spairs(my_rows, function(t, a, b) return t[a].order < t[b].order end) do
+			if row.label then
+				local tempIdx = idx
+				idx, v = next(self.instances_unroll.labels,idx)
+				if not (idx) then
+					local label_row = self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, font_height, self.instances_unroll.unroll_frame, -(i-1)*font_height, row.label, "RIGHT");
+					table.insert(self.instances_unroll.labels, label_row)
+					idx = tempIdx + 1 
+				else
+					v:SetText(row.label)
+					v:Show()
+				end
+			end
+			i = i + 1
+		end
+		while idx do
+			idx, v = next(self.instances_unroll.labels,idx)
+			if(v) then
+				v:Hide()
+			end
+		end
+		instances_y_add = i
+	end
+	
+	-- populate it for alts
+	self.instances_unroll.alt_columns = self.instances_unroll.alt_columns or {};
+	local alt = 0
+	local db = MethodAltManagerDB;
+	for alt_guid, alt_data in spairs(db.data, function(t, a, b) return t[a].ilevel > t[b].ilevel end) do
+		alt = alt + 1
+		-- create the frame to which all the fontstrings anchor
+		local anchor_frame = self.instances_unroll.alt_columns[alt] or CreateFrame("Button", nil, self.instances_unroll.unroll_frame);
+		if not self.instances_unroll.alt_columns[alt] then
+			self.instances_unroll.alt_columns[alt] = anchor_frame;
+		end
+		anchor_frame:SetPoint("TOPLEFT", self.instances_unroll.unroll_frame, "TOPLEFT", per_alt_x * alt, -1);
+		anchor_frame:SetSize(per_alt_x, instances_y_add*20);
+		-- init table for fontstring storage
+		self.instances_unroll.alt_columns[alt].label_columns = self.instances_unroll.alt_columns[alt].label_columns or {};
+		local label_columns = self.instances_unroll.alt_columns[alt].label_columns;
+		-- create / fill fontstrings
+		local i = 1;
+		for column_iden, column in spairs(my_rows, function(t, a, b) return t[a].order < t[b].order end) do
+			local current_row = 
+				label_columns[i] or self:CreateFontFrame(
+					self.instances_unroll.unroll_frame,
+					per_alt_x,
+					column.font_height or font_height,
+					anchor_frame, -(i - 1) * font_height,
+					column.data(alt_data,i),
+					"CENTER");
+			-- insert it into storage if just created
+			if not self.instances_unroll.alt_columns[alt].label_columns[i] then
+				self.instances_unroll.alt_columns[alt].label_columns[i] = current_row;
+			end
+			current_row:SetText(column.data(alt_data,i));
+			current_row:Show();
+			i = i + 1
+		end
+		i = i-1
+		for idx, col  in pairs(self.instances_unroll.alt_columns[alt].label_columns) do
+			if (idx > i) then
+				col:Hide();
+			end
+		end
+	end
+
+	-- fixup the background
+	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey + (instances_y_add*20));
+	self.main_frame.background:SetAllPoints();
+end
+
+function AltManagerDropDown_Menu(frame, level, menuList)
+	local info = UIDropDownMenu_CreateInfo();
+	local lenTiers = EJ_GetNumTiers();
+	for i=1, lenTiers do
+		info.text = EJ_GetTierInfo(i);
+		info.func = frame.SetTier
+		info.checked = i ==  EJ_GetCurrentTier();
+		info.arg1 = i;
+		UIDropDownMenu_AddButton(info, level)
+	end
+end
+
+function AltManager:MakeRaidString(data,i)
+	if not data then return "-" end
+	if not i then return "-" end
 	local string = ""
-	if mythic > 0 then string = string .. tostring(mythic) .. "M" end
-	if heroic > 0 and mythic > 0 then string = string .. "-" end
-	if heroic > 0 then string = string .. tostring(heroic) .. "H" end
-	if normal > 0 and (mythic > 0 or heroic > 0) then string = string .. "-" end
-	if normal > 0 then string = string .. tostring(normal) .. "N" end
-	if lfr > 0 and (mythic > 0 or heroic > 0 or normal > 0) then string = string .. "-" end
-	if lfr > 0 then string = string .. tostring(lfr) .. "L" end
-	return string == "" and "-" or string
+	local legacy = 0
+	local raid = data[self.instances_unroll.labels[i]:GetText()];
+	if raid then
+		for difi, iobj in pairs(raid) do
+			if difi == 14 then -- "Normal" (Raids)
+				string = string .. tostring(iobj[4]) .. "N";
+			elseif difi == 15 then -- "Heroic" (Raids)
+				string = string .. tostring(iobj[4]) .. "H";
+			elseif difi == 16 then -- "Mythic" (Raids)
+				string = string .. tostring(iobj[4]) .. "M";
+			elseif difi == 17 then -- "Looking For Raid"
+				string = string .. tostring(iobj[4]) .. "L";
+			else -- Legacy raids
+				legacy = legacy + iobj[4];
+			end
+		end
+	else
+		return "-"
+	end
+	if legacy > 0 then
+		return tostring(legacy);
+	else
+		return string;
+	end
 end
 
 function AltManager:HideInterface()
@@ -890,6 +912,9 @@ function AltManager:MakeTopBottomTextures(frame)
 	if frame.topPanel == nil then
 		frame.topPanel = CreateFrame("Frame", "AltManagerTopPanel", frame);
 		frame.topPanelTex = frame.topPanel:CreateTexture(nil, "BACKGROUND");
+		local logo = frame.topPanel:CreateTexture("logo","ARTWORK");
+		logo:SetPoint("TOPLEFT");
+		logo:SetTexture("Interface\\AddOns\\MethodAltManager\\Media\\AltManager64");
 		--frame.topPanelTex:ClearAllPoints();
 		frame.topPanelTex:SetAllPoints();
 		--frame.topPanelTex:SetSize(frame:GetWidth(), 30);
