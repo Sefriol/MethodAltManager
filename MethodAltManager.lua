@@ -5,7 +5,6 @@ _G["AltManager"] = AltManager;
 
 -- Made by: Qooning - Tarren Mill <Method>, 2017-2018
 
---local sizey = 200;
 local sizey = 220;
 local instances_y_add = 1;
 local xoffset = 0;
@@ -38,6 +37,14 @@ local max_ak = 40
 local VERSION = "1.2.1"
 
 local favoriteTier = EJ_GetNumTiers()
+
+-- BfA Currencies
+local currencies = {
+	[1560] = {},
+	[1587] = {},
+	[1565] = {},
+	[1710] = {}
+};
 
 -- Legion backup incase API call fails.
 local dungeons = {[199] = "BRH",
@@ -159,12 +166,12 @@ function AltManager:OnLogin()
 	
 	local alts = MethodAltManagerDB.alts;
 	
+	AltManager:CreateMenu();
 	self.main_frame:SetSize(max((alts + 1) * per_alt_x, min_x_size), sizey);
 	self.main_frame.background:SetAllPoints();
 	
 	-- Create menus
 	
-	AltManager:CreateMenu();
 	AltManager:MakeTopBottomTextures(self.main_frame);
 	AltManager:MakeBorder(self.main_frame, 5);
 end
@@ -426,9 +433,20 @@ function AltManager:CollectData(do_artifact)
 		end
 	end
 
-	-- order resources
+	-- Process currencies 
+	i = 1
+	for cid, cobj in pairs(currencies) do
+		local label, count = GetCurrencyInfo(cid)
+		currencies[cid]= {
+			["order"] = i,
+			["label"]= label,
+			["count"]= count
+		}
+		i = i + 1;
+	end
+
+	-- Currencies - Legion - DEPRECATED
 	local _, order_resources = GetCurrencyInfo(1220);
-	local _, war_resources = GetCurrencyInfo(1560);
 	local _, veiled_argunite = GetCurrencyInfo(1508);
 	local _, wakening_essence = GetCurrencyInfo(1533);
 	
@@ -470,6 +488,8 @@ function AltManager:CollectData(do_artifact)
 	--_, seals = GetCurrencyInfo(1580);
 	
 	seals_bought = 0
+
+	-- Seals - Legion
 	local gold_1 = IsQuestFlaggedCompleted(43895)
 	if gold_1 then seals_bought = seals_bought + 1 end
 	local gold_2 = IsQuestFlaggedCompleted(43896)
@@ -489,9 +509,26 @@ function AltManager:CollectData(do_artifact)
 	local marks_3 = IsQuestFlaggedCompleted(47865)
 	if marks_3 then seals_bought = seals_bought + 1 end
 	
-	
 	local class_hall_seal = IsQuestFlaggedCompleted(43510)
 	if class_hall_seal then seals_bought = seals_bought + 1 end
+	
+	-- Seals - BfA
+	local gold_1 = IsQuestFlaggedCompleted(52834)
+	--local gold_2 = IsQuestFlaggedCompleted(43896)
+	local resources_1 = IsQuestFlaggedCompleted(52837)
+	--local resources_2 = IsQuestFlaggedCompleted(52838)
+	local marks_1 = IsQuestFlaggedCompleted(52835)
+	--local marks_2 = IsQuestFlaggedCompleted(47864)
+
+	if gold_1 then seals_bought = seals_bought + 1 end
+	--if gold_2 then seals_bought = seals_bought + 1 end
+	
+	if resources_1 then seals_bought = seals_bought + 1 end
+	--if resources_2 then seals_bought = seals_bought + 1 end
+
+	if marks_1 then seals_bought = seals_bought + 1 end
+	--if marks_2 then seals_bought = seals_bought + 1 end
+
 
 	local nightbane_save = false;
 	local saves = GetNumSavedInstances();
@@ -537,6 +574,7 @@ function AltManager:CollectData(do_artifact)
 	char_table.level = level;
 	char_table.highest_mplus = highest_mplus;
 
+	char_table.currencies = currencies
 	char_table.order_resources = order_resources;
 	char_table.veiled_argunite = veiled_argunite;
 	char_table.wakening_essence = wakening_essence;
@@ -565,7 +603,6 @@ function AltManager:PopulateStrings()
 			self.main_frame.alt_columns[alt] = anchor_frame;
 		end
 		anchor_frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", per_alt_x * alt, -1);
-		anchor_frame:SetSize(per_alt_x, sizey);
 		-- init table for fontstring storage
 		self.main_frame.alt_columns[alt].label_columns = self.main_frame.alt_columns[alt].label_columns or {};
 		local label_columns = self.main_frame.alt_columns[alt].label_columns;
@@ -600,9 +637,72 @@ function AltManager:PopulateStrings()
 					current_row:GetFontString():SetJustifyV(column.justify);
 				end
 			end
+			if column.data == "currencies" then
+				if(alt_data.currencies) then
+					for cur_iden, cur in spairs(alt_data.currencies, function(t, a, b) return t[a].order < t[b].order end) do
+						local current_row = label_columns[i] or self:CreateFontFrame(
+							self.main_frame,
+							per_alt_x,
+							column.font_height or font_height,
+							anchor_frame,
+							-(i - 1) * font_height,
+							tostring(cur.count),
+							"CENTER");
+						-- insert it into storage if just created
+						if not self.main_frame.alt_columns[alt].label_columns[i] then
+							self.main_frame.alt_columns[alt].label_columns[i] = current_row;
+						end
+						if column.color then
+							local color = column.color(alt_data)
+							current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1);
+						end
+						current_row:SetText(tostring(cur.count))
+						if column.font then
+							current_row:GetFontString():SetFont(column.font, 8)
+						else
+							--current_row:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 14)
+						end
+						if column.justify then
+							current_row:GetFontString():SetJustifyV(column.justify);
+						end
+						i = i + 1
+					end
+				else
+					-- To make previous' version data compatible since those characters don't have "currencies"
+					for cur_iden, cur in spairs(currencies, function(t, a, b) return t[a].order < t[b].order end) do
+						local current_row = label_columns[i] or self:CreateFontFrame(
+							self.main_frame,
+							per_alt_x,
+							column.font_height or font_height,
+							anchor_frame,
+							-(i - 1) * font_height,
+							"0",
+							"CENTER");
+						-- insert it into storage if just created
+						if not self.main_frame.alt_columns[alt].label_columns[i] then
+							self.main_frame.alt_columns[alt].label_columns[i] = current_row;
+						end
+						if column.color then
+							local color = column.color(alt_data)
+							current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1);
+						end
+						current_row:SetText("0")
+						if column.font then
+							current_row:GetFontString():SetFont(column.font, 8)
+						else
+							--current_row:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 14)
+						end
+						if column.justify then
+							current_row:GetFontString():SetJustifyV(column.justify);
+						end
+						i = i + 1
+					end
+				end
+			end
 			i = i + 1
 		end
-		
+		sizey = 20 * i
+		anchor_frame:SetSize(per_alt_x, sizey);
 	end
 	
 end
@@ -655,42 +755,32 @@ function AltManager:CreateMenu()
 		--	label = artifact_reaserch_label,
 		--	data = function(alt_data) return tostring(alt_data.artifact_level) end,
 		--},
-		order_resources = {
-			order = 9,
-			label = resources_label,
-			data = function(alt_data) return alt_data.order_resources and tostring(alt_data.order_resources) or "0" end,
-		},
-		veiled_argunite = {
-			order = 9.5,
-			label = argunite_label,
-			data = function(alt_data) return alt_data.veiled_argunite and tostring(alt_data.veiled_argunite) or "0" end,
-		},
-		wakening_essence = {
-			order = 9.6,
-			label = wakening_essence_label,
-			data = function(alt_data) return alt_data.wakening_essence and tostring(alt_data.wakening_essence) or "0" end,
+		currencies = {
+			order = 8,
+			data = "currencies",
+			currency_function = function(currencies) end,
 		},
 		dummy_empty_line = {
-			order = 10,
+			order = 11,
 			data = function(alt_data) return " " end,
 		},
 		raid_unroll = {
-			order = 11,
+			order = 12,
 			data = "unroll",
-			name = "Instances >>",
+			name = "+ Instances",
 			unroll_function = function(button)
 				self.instances_unroll = self.instances_unroll or {};
 				self.instances_unroll.state = self.instances_unroll.state or "closed";
 				if self.instances_unroll.state == "closed" then
 					self:CreateUnrollFrame()
-					button:SetText("Instances <<");
+					button:SetText("-  Instances");
 					self.instances_unroll.state = "open";
 				else
 					-- do rollup
 					self.main_frame:SetSize(max((MethodAltManagerDB.alts + 1) * per_alt_x, min_x_size), sizey);
 					self.main_frame.background:SetAllPoints();
 					self.instances_unroll.unroll_frame:Hide();
-					button:SetText("Instances >>");
+					button:SetText("+  Instances");
 					self.instances_unroll.state = "closed";
 				end
 			end
@@ -702,7 +792,6 @@ function AltManager:CreateMenu()
 	local font_height = 20;
 	local label_column = self.main_frame.label_column or CreateFrame("Button", nil, self.main_frame);
 	if not self.main_frame.label_column then self.main_frame.label_column = label_column; end
-	label_column:SetSize(per_alt_x, sizey);
 	label_column:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, -1);
 
 	local i = 1;
@@ -747,8 +836,23 @@ function AltManager:CreateMenu()
 				row.unroll_function(unroll_button)
 			end
 		end
+		if row.data == "currencies" then
+			for cur_iden, cur in spairs(currencies, function(t, a, b) return t[a].order < t[b].order end) do
+				if cur.label then
+					self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, cur.label..":", "RIGHT");
+					self.main_frame.lowest_point = -(i-1)*font_height;
+				end
+				i = i + 1
+			end
+		end
 		i = i + 1
 	end
+	sizey = i * 20
+	label_column:SetSize(per_alt_x, sizey);
+end
+
+function AltManager:CreateCurrencyFrame()
+
 end
 
 function AltManager:CreateUnrollFrame()
@@ -915,9 +1019,7 @@ function AltManager:MakeTopBottomTextures(frame)
 		local logo = frame.topPanel:CreateTexture("logo","ARTWORK");
 		logo:SetPoint("TOPLEFT");
 		logo:SetTexture("Interface\\AddOns\\MethodAltManager\\Media\\AltManager64");
-		--frame.topPanelTex:ClearAllPoints();
 		frame.topPanelTex:SetAllPoints();
-		--frame.topPanelTex:SetSize(frame:GetWidth(), 30);
 		frame.topPanelTex:SetDrawLayer("ARTWORK", -5);
 		frame.topPanelTex:SetColorTexture(0, 0, 0, 0.7);
 		
