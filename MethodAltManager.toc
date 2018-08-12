@@ -1,10 +1,8 @@
-## Interface: 70300
+## Interface: 80000
 ## Title: Method Alt Manager
-## Author: Qoning
+## Author: Qoning and Sefriol
 ## Version: @project-version@
 ## Notes: Addon for Managing Alts
 ## SavedVariables: MethodAltManagerDB
 
 MethodAltManager.lua
-
-
