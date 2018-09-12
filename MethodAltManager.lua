@@ -388,7 +388,7 @@ function AltManager:CollectData(do_artifact)
 		local slots = GetContainerNumSlots(container)
 		for slot=1, slots do
 			local _, _, _, _, _, _, slotLink, _, _, slotItemID = GetContainerItemInfo(container, slot)
-			if slotItemID == 138019 then
+			if slotItemID == 158923 then
 				local itemString = slotLink:match("|Hkeystone:([0-9:]+)|h(%b[])|h")
 				local info = { strsplit(":", itemString) }
 				-- scan tooltip for depleted
@@ -940,7 +940,7 @@ function AltManager:CreateUnrollFrame()
 			if not self.instances_unroll.alt_columns[alt].label_columns[i] then
 				self.instances_unroll.alt_columns[alt].label_columns[i] = current_row;
 			end
-			current_row:SetText(column.data(alt_data,i));
+			current_row:SetText(column.data(alt_data, i));
 			current_row:Show();
 			i = i + 1
 		end
