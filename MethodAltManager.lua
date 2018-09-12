@@ -484,12 +484,13 @@ function AltManager:CollectData(do_artifact)
 		next_research = 0;
 	end
 	
-	_, seals = GetCurrencyInfo(1273);
-	--_, seals = GetCurrencyInfo(1580);
+	--_, seals = GetCurrencyInfo(1273);
+	_, seals = GetCurrencyInfo(1580);
 	
 	seals_bought = 0
 
 	-- Seals - Legion
+--[[ 
 	local gold_1 = IsQuestFlaggedCompleted(43895)
 	if gold_1 then seals_bought = seals_bought + 1 end
 	local gold_2 = IsQuestFlaggedCompleted(43896)
@@ -507,27 +508,27 @@ function AltManager:CollectData(do_artifact)
 	local marks_2 = IsQuestFlaggedCompleted(47864)
 	if marks_2 then seals_bought = seals_bought + 1 end
 	local marks_3 = IsQuestFlaggedCompleted(47865)
-	if marks_3 then seals_bought = seals_bought + 1 end
+	if marks_3 then seals_bought = seals_bought + 1 end ]]
 	
-	local class_hall_seal = IsQuestFlaggedCompleted(43510)
-	if class_hall_seal then seals_bought = seals_bought + 1 end
+	--local class_hall_seal = IsQuestFlaggedCompleted(43510)
+	--if class_hall_seal then seals_bought = seals_bought + 1 end
 	
 	-- Seals - BfA
 	local gold_1 = IsQuestFlaggedCompleted(52834)
-	--local gold_2 = IsQuestFlaggedCompleted(43896)
+	local gold_2 = IsQuestFlaggedCompleted(52838)
 	local resources_1 = IsQuestFlaggedCompleted(52837)
-	--local resources_2 = IsQuestFlaggedCompleted(52838)
+	local resources_2 = IsQuestFlaggedCompleted(52840)
 	local marks_1 = IsQuestFlaggedCompleted(52835)
-	--local marks_2 = IsQuestFlaggedCompleted(47864)
+	local marks_2 = IsQuestFlaggedCompleted(52839)
 
 	if gold_1 then seals_bought = seals_bought + 1 end
-	--if gold_2 then seals_bought = seals_bought + 1 end
+	if gold_2 then seals_bought = seals_bought + 1 end
 	
 	if resources_1 then seals_bought = seals_bought + 1 end
-	--if resources_2 then seals_bought = seals_bought + 1 end
+	if resources_2 then seals_bought = seals_bought + 1 end
 
 	if marks_1 then seals_bought = seals_bought + 1 end
-	--if marks_2 then seals_bought = seals_bought + 1 end
+	if marks_2 then seals_bought = seals_bought + 1 end
 
 
 	local nightbane_save = false;
