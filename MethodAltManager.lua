@@ -23,8 +23,7 @@ local mythic_done_label = "Highest M+ done"
 local mythic_keystone_label = "Keystone"
 local seals_owned_label = "Seals owned"
 local seals_bought_label = "Seals obtained"
-local artifact_reaserch_label = "AK level"
-local artifact_research_time_label = "Next level in"
+local azerite_label = "Heart of Azeroth"
 local depleted_label = "Depleted"
 local nightbane_label = "Nightbane"
 local resources_label = "Order Resources"
@@ -122,7 +121,7 @@ do
 	main_frame:RegisterEvent("PLAYER_LOGIN");
 	main_frame:RegisterEvent("QUEST_TURNED_IN");
 	main_frame:RegisterEvent("BAG_UPDATE_DELAYED");
-	main_frame:RegisterEvent("ARTIFACT_XP_UPDATE");
+	main_frame:RegisterEvent("AZERITE_ITEM_EXPERIENCE_CHANGED");
 	main_frame:RegisterEvent("CHAT_MSG_CURRENCY");
 	main_frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE");
 	
@@ -137,7 +136,7 @@ do
 		if event == "PLAYER_LOGIN" then
 			AltManager:OnLogin();
 		end
-		if event == "ARTIFACT_XP_UPDATE" then
+		if event == "AZERITE_ITEM_EXPERIENCE_CHANGED" then
 			local data = AltManager:CollectData();
 			AltManager:StoreData(data);
 		end
@@ -417,20 +416,17 @@ function AltManager:CollectData(do_artifact)
 		level = "?"
 	end
 	
-	if do_artifact and HasArtifactEquipped() then
-		if not ArtifactFrame then
-			LoadAddOn("Blizzard_ArtifactUI");
-		end
-		-- open artifact
-		local is_open = ArtifactFrame:IsShown();
-		if (not ArtifactFrame or not ArtifactFrame:IsShown()) then
-			SocketInventoryItem(INVSLOT_MAINHAND);
-		end
-		_,_,_,_,_, artifact_level = C_ArtifactUI.GetEquippedArtifactInfo()
-		-- close artifact
-		if not is_open and ArtifactFrame and ArtifactFrame:IsShown() and C_ArtifactUI.IsViewedArtifactEquipped() then
-			C_ArtifactUI.Clear();
-		end
+	local heart_of_azeroth = nil
+	-- Heart of Azeroth Progress
+	local azeriteItemLocation = C_AzeriteItem.FindActiveAzeriteItem(); 
+
+	if (azeriteItemLocation) then
+		local xp, totalLevelXP = C_AzeriteItem.GetAzeriteItemXPInfo(azeriteItemLocation);
+		heart_of_azeroth = {
+			['lvl'] = C_AzeriteItem.GetPowerLevel(azeriteItemLocation),
+			['xp'] = xp,
+			['totalXP'] = totalLevelXP,
+		}
 	end
 
 	-- Process currencies 
@@ -573,6 +569,7 @@ function AltManager:CollectData(do_artifact)
 	end
 	char_table.dungeon = dungeon;
 	char_table.level = level;
+	char_table.heart_of_azeroth = heart_of_azeroth;
 	char_table.highest_mplus = highest_mplus;
 
 	char_table.currencies = currencies
@@ -731,31 +728,35 @@ function AltManager:CreateMenu()
 			justify = "TOP",
 			font = "Fonts\\FRIZQT__.TTF",
 		},
-		mplus = {
+		hoalevel = {
 			order = 3,
+			label = azerite_label,
+			data = function(alt_data)
+				if not alt_data.heart_of_azeroth then return "-"
+				else return tostring(alt_data.heart_of_azeroth.lvl) .. " (" .. tostring(alt_data.heart_of_azeroth.xp/alt_data.heart_of_azeroth.totalXP*100):gsub('(%-?%d+)%.%d+','%1') .. "%)"
+				end
+			end,
+		},
+		mplus = {
+			order = 4,
 			label = mythic_done_label,
 			data = function(alt_data) return tostring(alt_data.highest_mplus) end, 
 		},
 		keystone = {
-			order = 4,
+			order = 5,
 			label = mythic_keystone_label,
 			data = function(alt_data) local depleted_string = alt_data.is_depleted and " (D)" or ""; return (dungeons[alt_data.dungeon] or alt_data.dungeon) .. " +" .. tostring(alt_data.level) .. depleted_string; end,
 		},
 		seals_owned = {
-			order = 5,
+			order = 6,
 			label = seals_owned_label,
 			data = function(alt_data) return tostring(alt_data.seals) end,
 		},
 		seals_bought = {
-			order = 6,
+			order = 7,
 			label = seals_bought_label,
 			data = function(alt_data) return tostring(alt_data.seals_bought) end,
 		},
-		--artifact_level = {
-		--	order = 7,
-		--	label = artifact_reaserch_label,
-		--	data = function(alt_data) return tostring(alt_data.artifact_level) end,
-		--},
 		currencies = {
 			order = 8,
 			data = "currencies",
@@ -968,6 +969,12 @@ function AltManagerDropDown_Menu(frame, level, menuList)
 		info.arg1 = i;
 		UIDropDownMenu_AddButton(info, level)
 	end
+end
+
+function AltManager:MakeHoAString(data)
+	if not data then return "-" end;
+	if not data.heart_of_azeroth then return "-" end;
+	return tostring(data.lvl) .. "(" .. tostring(data.xp/data.totalXP) .. ")";
 end
 
 function AltManager:MakeRaidString(data,i)
