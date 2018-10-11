@@ -33,7 +33,7 @@ local wakening_essence_label = "Wakening Essence"
 -- deprecated
 local max_ak = 40
 
-local VERSION = "1.2.1"
+local VERSION = "2.0.1"
 
 local favoriteTier = EJ_GetNumTiers()
 
@@ -177,7 +177,8 @@ end
 
 function AltManager:OnLoad()
 	self.main_frame:UnregisterEvent("ADDON_LOADED");
-	
+	tinsert(UISpecialFrames,"AltManagerFrame");
+
 	MethodAltManagerDB = MethodAltManagerDB or self:InitDB();
 
 	self.addon_loaded = true
@@ -972,6 +973,7 @@ function AltManagerDropDown_Menu(frame, level, menuList)
 end
 
 function AltManager:MakeHoAString(data)
+	print(data,"---")
 	if not data then return "-" end;
 	if not data.heart_of_azeroth then return "-" end;
 	return tostring(data.lvl) .. "(" .. tostring(data.xp/data.totalXP) .. ")";
