@@ -286,6 +286,10 @@ function AltManager:ValidateReset()
 			char_table.highest_mplus = 0;
 			char_table.is_depleted = false;
 			char_table.expires = self:GetNextWeeklyResetTime();
+			char_table.savedins = {}
+			if not char_table.heart_of_azeroth then else
+				char_table.heart_of_azeroth.weekly = false
+			end
 		end
 	end
 end
@@ -427,6 +431,7 @@ function AltManager:CollectData(do_artifact)
 			['lvl'] = C_AzeriteItem.GetPowerLevel(azeriteItemLocation),
 			['xp'] = xp,
 			['totalXP'] = totalLevelXP,
+			['weekly'] = IsQuestFlaggedCompleted(53435) or IsQuestFlaggedCompleted(53436),
 		}
 	end
 
@@ -442,10 +447,10 @@ function AltManager:CollectData(do_artifact)
 		i = i + 1;
 	end
 
-	-- Currencies - Legion - DEPRECATED
+	--[[ Currencies - Legion - DEPRECATED
 	local _, order_resources = GetCurrencyInfo(1220);
 	local _, veiled_argunite = GetCurrencyInfo(1508);
-	local _, wakening_essence = GetCurrencyInfo(1533);
+	local _, wakening_essence = GetCurrencyInfo(1533);]]
 	
 	local shipments = C_Garrison.GetLooseShipments(LE_GARRISON_TYPE_7_0)
 	local creation_time = nil
@@ -505,11 +510,11 @@ function AltManager:CollectData(do_artifact)
 	local marks_2 = IsQuestFlaggedCompleted(47864)
 	if marks_2 then seals_bought = seals_bought + 1 end
 	local marks_3 = IsQuestFlaggedCompleted(47865)
-	if marks_3 then seals_bought = seals_bought + 1 end ]]
+	if marks_3 then seals_bought = seals_bought + 1 end 
 	
-	--local class_hall_seal = IsQuestFlaggedCompleted(43510)
-	--if class_hall_seal then seals_bought = seals_bought + 1 end
-	
+	local class_hall_seal = IsQuestFlaggedCompleted(43510)
+	if class_hall_seal then seals_bought = seals_bought + 1 end
+	]]
 	-- Seals - BfA
 	local gold_1 = IsQuestFlaggedCompleted(52834)
 	local gold_2 = IsQuestFlaggedCompleted(52838)
@@ -732,9 +737,16 @@ function AltManager:CreateMenu()
 		hoalevel = {
 			order = 3,
 			label = azerite_label,
+			color = function(alt_data)
+				if not alt_data.heart_of_azeroth then return {r=255, g=0, b=0}
+				else
+					return alt_data.heart_of_azeroth.weekly and {r=0, g=255, b=0} or {r=255, g=0, b=0};
+				end
+			end,
 			data = function(alt_data)
 				if not alt_data.heart_of_azeroth then return "-"
-				else return tostring(alt_data.heart_of_azeroth.lvl) .. " (" .. tostring(alt_data.heart_of_azeroth.xp/alt_data.heart_of_azeroth.totalXP*100):gsub('(%-?%d+)%.%d+','%1') .. "%)"
+				else
+					return tostring(alt_data.heart_of_azeroth.lvl) .. " (" .. tostring(alt_data.heart_of_azeroth.xp/alt_data.heart_of_azeroth.totalXP*100):gsub('(%-?%d+)%.%d+','%1') .. "%)"
 				end
 			end,
 		},
@@ -995,7 +1007,7 @@ function AltManager:MakeRaidString(data,i)
 				string = string .. tostring(iobj[4]) .. "M";
 			elseif difi == 17 then -- "Looking For Raid"
 				string = string .. tostring(iobj[4]) .. "L";
-			else -- Legacy raids
+			else -- Legacy raids	
 				legacy = legacy + iobj[4];
 			end
 		end
