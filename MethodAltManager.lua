@@ -25,15 +25,8 @@ local seals_owned_label = "Seals owned"
 local seals_bought_label = "Seals obtained"
 local azerite_label = "Heart of Azeroth"
 local depleted_label = "Depleted"
-local nightbane_label = "Nightbane"
-local resources_label = "Order Resources"
-local argunite_label = "Veiled Argunite"
-local wakening_essence_label = "Wakening Essence"
 
--- deprecated
-local max_ak = 40
-
-local VERSION = "2.0.1"
+local VERSION = "2.0.2"
 
 local favoriteTier = EJ_GetNumTiers()
 
@@ -45,23 +38,8 @@ local currencies = {
 	[1710] = {}
 };
 
--- Legion backup incase API call fails.
-local dungeons = {
-	[199] = "BRH",
-	[210] = "CoS",
-	[198] = "DHT",
-	[197] = "EoA",
-	[200] = "HoV",
-	[208] = "MoS",
-	[206] = "NL",
-	[209] = "Arcway",
-	[207] = "VotW",
-	[1544] = "VH",
-	[227] = "L-Kara",
-	[233] = "Cath",
-	[234] = "U-Kara",
-	[239] = "Seat"
-};
+-- Mythic+ Dungeons
+local dungeons = {}
 
 local BfAWorldBosses = {
 --[BossID] = QuestID
@@ -154,7 +132,7 @@ do
 			AltManager:StoreData(data);
 		end
 		if (event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE") and AltManager.addon_loaded then
-			local data = AltManager:CollectData(false);
+			local data = AltManager:CollectData();
 			AltManager:StoreData(data);
 		end
 		
@@ -360,19 +338,13 @@ function AltManager:StoreData(data)
 		db.data[guid] = data;
 		db.alts = db.alts + 1;
 	else
-		local lvl = db.data[guid].artifact_level;
-		data.artifact_level = data.artifact_level or lvl;
 		db.data[guid] = data;
 	end
 end
 
-function AltManager:CollectData(do_artifact)
+function AltManager:CollectData()
 
 	if UnitLevel('player') < min_level then return end;
-
-	if do_artifact == nil then
-		do_artifact = true
-	end
 	
 	local name = UnitName('player')
 	local _, class = UnitClass('player')
@@ -381,8 +353,6 @@ function AltManager:CollectData(do_artifact)
 	local level = nil;
 	local seals = nil;
 	local seals_bought = nil;
-	local artifact_level = nil;
-	local next_research = nil;
 	local highest_mplus = 0;
 	local depleted = false;
 
@@ -419,7 +389,6 @@ function AltManager:CollectData(do_artifact)
 					end
 				end
 				self.main_frame.scan_tooltip:Hide();
-				--local mapname = C_ChallengeMode.GetMapInfo(info[1]);
 				dungeon = tonumber(info[2])
 				if not dungeon then print("MethodAltManager - Parse Failure, please let Qoning know that this happened."); end
 				level = tonumber(info[3])
@@ -434,8 +403,8 @@ function AltManager:CollectData(do_artifact)
 		level = "?"
 	end
 	
-	local heart_of_azeroth = nil
 	-- Heart of Azeroth Progress
+	local heart_of_azeroth = nil
 	local azeriteItemLocation = C_AzeriteItem.FindActiveAzeriteItem(); 
 
 	if (azeriteItemLocation) then
@@ -454,80 +423,16 @@ function AltManager:CollectData(do_artifact)
 		local label, count = GetCurrencyInfo(cid)
 		currencies[cid]= {
 			["order"] = i,
-			["label"]= label,
-			["count"]= count
+			["label"] = label,
+			["count"] = count
 		}
 		i = i + 1;
 	end
 
-	--[[ Currencies - Legion - DEPRECATED
-	local _, order_resources = GetCurrencyInfo(1220);
-	local _, veiled_argunite = GetCurrencyInfo(1508);
-	local _, wakening_essence = GetCurrencyInfo(1533);]]
-	
-	local shipments = C_Garrison.GetLooseShipments(LE_GARRISON_TYPE_7_0)
-	local creation_time = nil
-	local duration = nil
-	local num_ready = nil
-	local num_total = nil
-	local found_research = false
-	
-	for i = 1, #shipments do
-		local name, _, _, numReady, numTotal, creationTime, duration_l = C_Garrison.GetLandingPageShipmentInfoByContainerID(shipments[i])
-		
-		if name == GetItemInfo(139390) then		-- the name must be "Artifact Research Notes"
-			found_research = true;
-			creation_time = creationTime
-			duration = duration_l
-			num_ready = numReady
-			num_total = numTotal
-		end
-	end
-	
-	
-	if found_research and num_ready == 0 then
-		local remaining = (creation_time + duration) - time();
-			if (remaining < 0) then		-- next shipment is ready
-			num_ready = num_ready + 1
-			if num_ready > num_total then	-- prevent overflow
-				num_ready = num_total
-			end
-			remaining = 0
-		end
-		next_research = creation_time + duration
-	else
-		next_research = 0;
-	end
-	
-	--_, seals = GetCurrencyInfo(1273);
 	_, seals = GetCurrencyInfo(1580);
 	
 	seals_bought = 0
 
-	-- Seals - Legion
---[[ 
-	local gold_1 = IsQuestFlaggedCompleted(43895)
-	if gold_1 then seals_bought = seals_bought + 1 end
-	local gold_2 = IsQuestFlaggedCompleted(43896)
-	if gold_2 then seals_bought = seals_bought + 1 end
-	local gold_3 = IsQuestFlaggedCompleted(43897)
-	if gold_3 then seals_bought = seals_bought + 1 end
-	local resources_1 = IsQuestFlaggedCompleted(43892)
-	if resources_1 then seals_bought = seals_bought + 1 end
-	local resources_2 = IsQuestFlaggedCompleted(43893)
-	if resources_2 then seals_bought = seals_bought + 1 end
-	local resources_3 = IsQuestFlaggedCompleted(43894)
-	if resources_3 then seals_bought = seals_bought + 1 end
-	local marks_1 = IsQuestFlaggedCompleted(47851)
-	if marks_1 then seals_bought = seals_bought + 1 end
-	local marks_2 = IsQuestFlaggedCompleted(47864)
-	if marks_2 then seals_bought = seals_bought + 1 end
-	local marks_3 = IsQuestFlaggedCompleted(47865)
-	if marks_3 then seals_bought = seals_bought + 1 end 
-	
-	local class_hall_seal = IsQuestFlaggedCompleted(43510)
-	if class_hall_seal then seals_bought = seals_bought + 1 end
-	]]
 	-- Seals - BfA
 	local gold_1 = IsQuestFlaggedCompleted(52834)
 	local gold_2 = IsQuestFlaggedCompleted(52838)
@@ -546,7 +451,6 @@ function AltManager:CollectData(do_artifact)
 	if marks_2 then seals_bought = seals_bought + 1 end
 
 
-	local nightbane_save = false;
 	local saves = GetNumSavedInstances();
 	local char_table = {}
 	char_table.savedins = {}
@@ -592,26 +496,12 @@ function AltManager:CollectData(do_artifact)
 	char_table.seals = seals;
 	char_table.seals_bought = seals_bought;
 
-	if mine_old and mine_old.next_research and mine_old.next_research > next_research then
-		char_table.next_research = mine_old.next_research;
-	elseif mine_old and mine_old.next_research and mine_old.next_research < next_research then
-		char_table.next_research = next_research;
-		print("MethodAltManager debug: trying to overwrite old value with a lower one!");
-	else
-		char_table.next_research = next_research;
-	end
-	if do_artifact then
-		char_table.artifact_level = artifact_level;
-	end
 	char_table.dungeon = dungeon;
 	char_table.level = level;
 	char_table.heart_of_azeroth = heart_of_azeroth;
 	char_table.highest_mplus = highest_mplus;
 
 	char_table.currencies = currencies
-	char_table.order_resources = order_resources;
-	char_table.veiled_argunite = veiled_argunite;
-	char_table.wakening_essence = wakening_essence;
 	char_table.is_depleted = depleted;
 	char_table.expires = self:GetNextWeeklyResetTime();
 	return char_table;
