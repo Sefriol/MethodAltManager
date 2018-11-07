@@ -46,21 +46,34 @@ local currencies = {
 };
 
 -- Legion backup incase API call fails.
-local dungeons = {[199] = "BRH",
-				  [210] = "CoS",
-				  [198] = "DHT",
-				  [197] = "EoA",
-				  [200] = "HoV",
-				  [208] = "MoS",
-				  [206] = "NL",
-				  [209] = "Arcway",
-				  [207] = "VotW",
-				  [1544] = "VH",
-				  [227] = "L-Kara",
-				  [233] = "Cath",
-				  [234] = "U-Kara",
-				  [239] = "Seat"
-				 };
+local dungeons = {
+	[199] = "BRH",
+	[210] = "CoS",
+	[198] = "DHT",
+	[197] = "EoA",
+	[200] = "HoV",
+	[208] = "MoS",
+	[206] = "NL",
+	[209] = "Arcway",
+	[207] = "VotW",
+	[1544] = "VH",
+	[227] = "L-Kara",
+	[233] = "Cath",
+	[234] = "U-Kara",
+	[239] = "Seat"
+};
+
+local BfAWorldBosses = {
+--[BossID] = QuestID
+	[2139] = 52181, -- T'zane
+	[2141] = 52169, -- Ji'arak
+	[2197] = 52157, -- Hailstone Construct
+	[2212] = 52848, -- The Lion's Roar (Horde)
+	[2199] = 52163, -- Azurethos, The Winged Typhoon
+	[2198] = 52166, -- Warbringer Yenajz
+	[2210] = 52196, -- Dunegorger Kraulok
+	[2213] = 52847, -- Doom's Howl (Alliance)
+}
 
 local raids = {}
 
@@ -550,7 +563,24 @@ function AltManager:CollectData(do_artifact)
 			}
 		end
 	end
+
+	-- Check BfA World bosses
+	local bfaworldtotal = 0
+	for cid, cobj in pairs(BfAWorldBosses) do
+		bfaworldtotal = IsQuestFlaggedCompleted(cobj) and bfaworldtotal+1 or bfaworldtotal
+	end
+	if (bfaworldtotal > 0) then
+		char_table.savedins["Azeroth"] = char_table.savedins[name] or {}
+		char_table.savedins["Azeroth"][4] = {
+			4,
+			"25 Player",
+			2,
+			bfaworldtotal,
+		}
+	end
+
 	
+
 	local _, ilevel = GetAverageItemLevel();
 
 	-- store data into a table
