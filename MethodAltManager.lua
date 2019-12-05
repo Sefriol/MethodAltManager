@@ -33,7 +33,7 @@ local favoriteTier = EJ_GetNumTiers()
 -- BfA Currencies
 local currencies = {
 	[1560] = {},
-	[1587] = {},
+	[1718] = {},
 	[1721] = {},
 	[1710] = {}
 };
