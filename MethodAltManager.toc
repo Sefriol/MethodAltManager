@@ -1,4 +1,4 @@
-## Interface: 80000
+## Interface: 80205
 ## Title: Method Alt Manager
 ## Author: Qoning and Sefriol
 ## Version: @project-version@
