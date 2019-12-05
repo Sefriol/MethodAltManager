@@ -34,7 +34,7 @@ local favoriteTier = EJ_GetNumTiers()
 local currencies = {
 	[1560] = {},
 	[1587] = {},
-	[1565] = {},
+	[1721] = {},
 	[1710] = {}
 };
 
