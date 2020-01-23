@@ -6,3 +6,4 @@
 ## SavedVariables: MethodAltManagerDB
 
 MethodAltManager.lua
+Options.lua

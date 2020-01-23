@@ -1,23 +1,24 @@
 
-local _, AltManager = ...;
+local _, AltManager = ...
 
-_G["AltManager"] = AltManager;
+_G["AltManager"] = AltManager
 
 -- Made by: Qooning - Tarren Mill <Method>, 2017-2018
 
-local sizey = 220;
-local instances_y_add = 1;
-local xoffset = 0;
-local yoffset = 150;
-local alpha = 1;
-local addon = "MethodAltManager";
-local numel = table.getn;
+local sizey = 220
+local instances_y_add = 1
+local currencies_y_add = 1
+local xoffset = 0
+local yoffset = 150
+local alpha = 1
+local addon = "MethodAltManager"
+local numel = table.getn
 local Aurora = _G.Aurora
-local per_alt_x = 120;
+local per_alt_x = 120
 
-local min_x_size = 300;
+local min_x_size = 300
 
-local min_level = 110;
+local min_level = 110
 local name_label = "Name"
 local mythic_done_label = "Highest M+ done"
 local mythic_keystone_label = "Keystone"
@@ -30,13 +31,43 @@ local VERSION = "2.0.2"
 
 local favoriteTier = EJ_GetNumTiers()
 
--- BfA Currencies
-local currencies = {
-	[1560] = {},
-	[1718] = {},
-	[1721] = {},
-	[1710] = {}
-};
+
+local function format_table_impl (table, out, indent, visited)
+   indent  = indent or 2     -- indentation level for current table
+   visited = visited or {}   -- visited tables, avoid infinite recursion
+   visited[table] = true     -- mark current table as visited
+   out[#out+1] = format('%s {\n', tostring(table))
+   for k,v in pairs(table) do
+      out[#out+1] = format('%s%s = ', string.rep(' ',indent), tostring(k))
+      if type(v) == 'table' then
+         if visited[v] then
+            out[#out+1] = format('%s { already shown }\n', tostring(v))
+         else
+            format_table_impl (v, out, indent+2, visited)
+         end
+      else
+         out[#out+1] = format('%s\n', tostring(v))
+      end
+   end 
+   out[#out+1] = format('%s},\n', string.rep(' ', indent-2))
+end
+
+function format_table(t)
+   local out = {}
+   format_table_impl(t, out)
+   return table.concat(out)
+end
+
+function print_table(table)
+   DEFAULT_CHAT_FRAME:AddMessage(format_table(table))
+end
+
+
+function tablelength(T)
+  local count = 0
+  for _ in pairs(T) do count = count + 1 end
+  return count
+end
 
 -- Mythic+ Dungeons
 local dungeons = {}
@@ -55,8 +86,8 @@ local BfAWorldBosses = {
 
 local raids = {}
 
-SLASH_METHODALTMANAGER1 = "/mam";
-SLASH_METHODALTMANAGER2 = "/alts";
+SLASH_METHODALTMANAGER1 = "/mam"
+SLASH_METHODALTMANAGER2 = "/alts"
 
 local function spairs(t, order)
     local keys = {}
@@ -84,118 +115,120 @@ function SlashCmdList.METHODALTMANAGER(cmd, editbox)
 		print("   \"/alts purge\" to remove all stored data.")
 		print("   \"/alts remove name\" to remove characters by name.")
 	elseif rqst == "purge" then
-		AltManager:Purge();
+		AltManager:Purge()
 	elseif rqst == "remove" then
 		AltManager:RemoveCharactersByName(arg)
 	else
-		AltManager:ShowInterface();
+		AltManager:ShowInterface()
 	end
 end
 
 do
-	local main_frame = CreateFrame("frame", "AltManagerFrame", UIParent);
-	AltManager.main_frame = main_frame;
-	main_frame:SetFrameStrata("MEDIUM");
-	main_frame.background = main_frame:CreateTexture(nil, "BACKGROUND");
-	main_frame.background:SetAllPoints();
-	main_frame.background:SetDrawLayer("ARTWORK", 1);
-	main_frame.background:SetColorTexture(0, 0, 0, 0.5);
+	local main_frame = CreateFrame("frame", "AltManagerFrame", UIParent)
+	AltManager.main_frame = main_frame
+	main_frame:SetFrameStrata("MEDIUM")
+	main_frame.background = main_frame:CreateTexture(nil, "BACKGROUND")
+	main_frame.background:SetAllPoints()
+	main_frame.background:SetDrawLayer("ARTWORK", 1)
+	main_frame.background:SetColorTexture(0, 0, 0, 0.5)
 	
-	main_frame.scan_tooltip = CreateFrame('GameTooltip', 'DepletedTooltipScan', UIParent, 'GameTooltipTemplate');
+	main_frame.scan_tooltip = CreateFrame('GameTooltip', 'DepletedTooltipScan', UIParent, 'GameTooltipTemplate')
 	
 
 	-- Set frame position
-	main_frame:ClearAllPoints();
-	main_frame:SetPoint("CENTER", UIParent, "CENTER", xoffset, yoffset);
+	main_frame:ClearAllPoints()
+	main_frame:SetPoint("CENTER", UIParent, "CENTER", xoffset, yoffset)
 	
-	main_frame:RegisterEvent("ADDON_LOADED");
-	main_frame:RegisterEvent("PLAYER_LOGIN");
-	main_frame:RegisterEvent("QUEST_TURNED_IN");
-	main_frame:RegisterEvent("BAG_UPDATE_DELAYED");
-	main_frame:RegisterEvent("AZERITE_ITEM_EXPERIENCE_CHANGED");
-	main_frame:RegisterEvent("CHAT_MSG_CURRENCY");
-	main_frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE");
+	main_frame:RegisterEvent("ADDON_LOADED")
+	main_frame:RegisterEvent("PLAYER_LOGIN")
+	main_frame:RegisterEvent("QUEST_TURNED_IN")
+	main_frame:RegisterEvent("BAG_UPDATE_DELAYED")
+	main_frame:RegisterEvent("AZERITE_ITEM_EXPERIENCE_CHANGED")
+	main_frame:RegisterEvent("CHAT_MSG_CURRENCY")
+	main_frame:RegisterEvent("CURRENCY_DISPLAY_UPDATE")
 	
 
 	main_frame:SetScript("OnEvent", function(self, ...)
-		local event, loaded = ...;
+		local event, loaded = ...
 		if event == "ADDON_LOADED" then
 			if addon == loaded then
-				AltManager:OnLoad();
+				AltManager:OnLoad()
 			end
 		end
 		if event == "PLAYER_LOGIN" then
-			AltManager:OnLogin();
+			AltManager:OnLogin()
+			AltManager:MAMO_INIT()
 		end
 		if event == "AZERITE_ITEM_EXPERIENCE_CHANGED" then
-			local data = AltManager:CollectData();
-			AltManager:StoreData(data);
+			local data = AltManager:CollectData()
+			AltManager:StoreData(data)
 		end
 		if (event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE") and AltManager.addon_loaded then
-			local data = AltManager:CollectData();
-			AltManager:StoreData(data);
+			local data = AltManager:CollectData()
+			AltManager:StoreData(data)
 		end
 		
 	end)
 	
 	-- Show Frame
-	main_frame:Hide();
+	main_frame:Hide()
 end
 
 function AltManager:InitDB()
-	local t = {};
-	t.alts = 0;
-	return t;
+	local t = {}
+	t.alts = 0
+	return t
 end
 
 -- because of guid...
 function AltManager:OnLogin()
 	self:GenerateDungeonTable()
-	self:ValidateReset();
-	self:StoreData(self:CollectData());
+	self.CurrencyTable = self.CurrencyTable or self:GenerateCurrencyTable()
+	self:ValidateReset()
+	self:StoreData(self:CollectData())
 	
-	local alts = MethodAltManagerDB.alts;
+	local alts = MethodAltManagerDB.alts
 	
-	AltManager:CreateMenu();
-	self.main_frame:SetSize(max((alts + 1) * per_alt_x, min_x_size), sizey);
-	self.main_frame.background:SetAllPoints();
+	AltManager:CreateMenu()
+	self.main_frame:SetSize(max((alts + 1) * per_alt_x, min_x_size), sizey)
+	self.main_frame.background:SetAllPoints()
 	
 	-- Create menus
 	
-	AltManager:MakeTopBottomTextures(self.main_frame);
-	AltManager:MakeBorder(self.main_frame, 5);
+	AltManager:MakeTopBottomTextures(self.main_frame)
+	AltManager:MakeBorder(self.main_frame, 5)
 end
 
 function AltManager:OnLoad()
-	self.main_frame:UnregisterEvent("ADDON_LOADED");
-	tinsert(UISpecialFrames,"AltManagerFrame");
+	self.main_frame:UnregisterEvent("ADDON_LOADED")
+	tinsert(UISpecialFrames,"AltManagerFrame")
 
-	MethodAltManagerDB = MethodAltManagerDB or self:InitDB();
+	MethodAltManagerDB = MethodAltManagerDB or self:InitDB()
 
 	self.addon_loaded = true
 
-	C_MythicPlus.RequestRewards();
-	C_MythicPlus.RequestCurrentAffixes();
-	C_MythicPlus.RequestMapInfo();
+	C_MythicPlus.RequestRewards()
+	C_MythicPlus.RequestCurrentAffixes()
+	C_MythicPlus.RequestMapInfo()
 	for k,v in pairs(dungeons) do
 		-- request info in advance
-		C_MythicPlus.RequestMapInfo(k);
+		C_MythicPlus.RequestMapInfo(k)
 	end
 end
 
 function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offset, label, justify)
-	local f = CreateFrame("Button", nil, parent);
-	f:SetSize(x_size, height);
+	local f = CreateFrame("Button", nil, parent)
+	f:SetSize(x_size, height)
 	f:SetNormalFontObject(GameFontHighlightSmall)
 	f:SetText(label)
-	f:SetPoint("TOPLEFT", relative_to, "TOPLEFT", 0, y_offset);
-	f:GetFontString():SetJustifyH(justify);
-	f:GetFontString():SetJustifyV("CENTER");
-	f:SetPushedTextOffset(0, 0);
+	f:SetPoint("TOPLEFT", relative_to, "TOPLEFT", 0, y_offset)
+	f:GetFontString():SetJustifyH(justify)
+	f:GetFontString():SetJustifyV("CENTER")
+	f:SetPushedTextOffset(0, 0)
 	f:GetFontString():SetWidth(120)
 	f:GetFontString():SetHeight(20)
 	
-	return f;
+	return f
 end
 
 function AltManager:Keyset()
@@ -210,46 +243,96 @@ end
 
 -- Use API to generate dungeons-table
 function AltManager:GenerateDungeonTable()
-	local tempMapTable = {};
-	local emptyTable = true;
-	local APITable = C_ChallengeMode.GetMapTable();
+	local tempMapTable = {}
+	local emptyTable = true
+	local APITable = C_ChallengeMode.GetMapTable()
 	for _, k in pairs(APITable) do
-		local name = C_ChallengeMode.GetMapUIInfo(k);
-		local shortHand = name:gsub("(%a)([%w_']*)", "%1"):gsub("%s+", "");
-		table.insert(tempMapTable, k, shortHand);
-		emptyTable = false;
+		local name = C_ChallengeMode.GetMapUIInfo(k)
+		local shortHand = name:gsub("(%a)([%w_']*)", "%1"):gsub("%s+", "")
+		table.insert(tempMapTable, k, shortHand)
+		emptyTable = false
 	end
 	if not emptyTable then
-		dungeons = tempMapTable;
+		dungeons = tempMapTable
 	end
+end
+
+-- Use API to generate currency-table
+function AltManager:GenerateCurrencyTable()
+	local tempCurrencyTable = {}
+	for i=1,10000 do
+		local name, currentAmount, texture, earnedThisWeek, weeklyMax, totalMax, isDiscovered, rarity = GetCurrencyInfo(i)
+		if isDiscovered then
+			tempCurrencyTable[i] = {
+				["label"] = name,
+                ["count"] = currentAmount,
+				["earned"] = earnedThisWeek,
+				["weekly"] = weeklyMax,
+				["total"] = totalMax
+            }
+		end
+	end
+	print('Currency Table created')
+	return tempCurrencyTable
+end
+
+function filterCurrencies(curr)
+	local FilteredList = {}
+	local currency_list = MethodAltManagerDB.options.currencies
+	if (currency_list) then
+		for cid, cobj in pairs(currency_list) do
+			if(curr[cid]) then
+				FilteredList[cid] = {
+					["label"] = curr[cid].label,
+					["order"] = currency_list[cid]["order"],
+					["count"] = curr[cid].count,
+					["earned"] = curr[cid].earned,
+					["weekly"] = curr[cid].weekly,
+					["total"] = curr[cid].total
+				}
+			else
+				local name, currentAmount, texture, earnedThisWeek, weeklyMax, totalMax, isDiscovered, rarity = GetCurrencyInfo(cid)
+				FilteredList[cid] = {
+				["label"] = name,
+				["order"] = currency_list[cid]["order"],
+                ["count"] = nil,
+				["earned"] = nil,
+				["weekly"] = weeklyMax,
+				["total"] = totalMax
+            }
+			end
+		end
+	end
+
+	return FilteredList
 end
 
 function AltManager:GenerateRaidData()
 	-- Select the latest tier
-	EJ_SelectTier(favoriteTier);
+	EJ_SelectTier(favoriteTier)
 	local raidData = {}
 	if EJ_GetCurrentTier() == favoriteTier then
 		local raid = {}
 		local instanceIdx = 1
-		local bossIdx = 1;
+		local bossIdx = 1
 		-- Get raid instance from latest tier
 		local instanceID, instanceName = EJ_GetInstanceByIndex(instanceIdx, true)
 		while instanceID do
-			raid["id"] = instanceID;
-			raid["label"] = instanceName;
+			raid["id"] = instanceID
+			raid["label"] = instanceName
 			raid["order"] = instanceIdx
-			raid["killed"] = nil;
-			local _, _, bossID = EJ_GetEncounterInfoByIndex(bossIdx, instanceID);
+			raid["killed"] = nil
+			local _, _, bossID = EJ_GetEncounterInfoByIndex(bossIdx, instanceID)
 			while bossID do
-				bossIdx = bossIdx + 1;
-				_, _, bossID = EJ_GetEncounterInfoByIndex(bossIdx, instanceID);
+				bossIdx = bossIdx + 1
+				_, _, bossID = EJ_GetEncounterInfoByIndex(bossIdx, instanceID)
 			end
 			raid["bosses"] = bossIdx - 1
 			raid["data"] = function(alt_data, i) return self:MakeRaidString(alt_data.savedins, i) end
-			raidData[instanceID] = raid;
+			raidData[instanceID] = raid
 			raid = {}
 			bossIdx = 1
-			instanceIdx = instanceIdx + 1;
+			instanceIdx = instanceIdx + 1
 			instanceID, instanceName = EJ_GetInstanceByIndex(instanceIdx, true)
 		end
 	end
@@ -258,8 +341,8 @@ end
 
 function AltManager:ValidateReset()
 	local db = MethodAltManagerDB
-	if not db then return end;
-	if not db.data then return end;
+	if not db then return end
+	if not db.data then return end
 	
 	local keyset = {}
 	for k in pairs(db.data) do
@@ -267,16 +350,16 @@ function AltManager:ValidateReset()
 	end
 	
 	for alt = 1, db.alts do
-		local expiry = db.data[keyset[alt]].expires or 0;
-		local char_table = db.data[keyset[alt]];
+		local expiry = db.data[keyset[alt]].expires or 0
+		local char_table = db.data[keyset[alt]]
 		if time() > expiry then
 			-- reset this alt
-			char_table.seals_bought = 0;
-			char_table.dungeon = "Unknown";
-			char_table.level = "?";
-			char_table.highest_mplus = 0;
-			char_table.is_depleted = false;
-			char_table.expires = self:GetNextWeeklyResetTime();
+			char_table.seals_bought = 0
+			char_table.dungeon = "Unknown"
+			char_table.level = "?"
+			char_table.highest_mplus = 0
+			char_table.is_depleted = false
+			char_table.expires = self:GetNextWeeklyResetTime()
 			char_table.savedins = {}
 			if not char_table.heart_of_azeroth then else
 				char_table.heart_of_azeroth.weekly = false
@@ -286,20 +369,20 @@ function AltManager:ValidateReset()
 end
 
 function AltManager:Purge()
-	MethodAltManagerDB = self:InitDB();
+	MethodAltManagerDB = self:InitDB()
 end
 
 function AltManager:RemoveCharactersByName(name)
-	local db = MethodAltManagerDB;
+	local db = MethodAltManagerDB
 
-	local indices = {};
+	local indices = {}
 	for guid, data in pairs(db.data) do
 		if db.data[guid].name == name then
 			indices[#indices+1] = guid
 		end
 	end
 
-	db.alts = db.alts - #indices;
+	db.alts = db.alts - #indices
 	for i = 1,#indices do
 		db.data[indices[i]] = nil
 	end
@@ -321,56 +404,87 @@ function AltManager:StoreData(data)
 		return
 	end
 
-	if UnitLevel('player') < min_level then return end;
+	if UnitLevel('player') < min_level then return end
 	
-	local db = MethodAltManagerDB;
-	local guid = data.guid;
+	local db = MethodAltManagerDB
+	local guid = data.guid
 	
-	db.data = db.data or {};
-	
-	local update = false;
+	db.data = db.data or {}
+	db.options = db.options or {}
+	db.options.currencies = db.options.currencies or {}
+	local update = false
 	for k, v in pairs(db.data) do
 		if k == guid then
-			update = true;
+			update = true
 		end
 	end
 	if not update then
-		db.data[guid] = data;
-		db.alts = db.alts + 1;
+		db.data[guid] = data
+		db.alts = db.alts + 1
 	else
-		db.data[guid] = data;
+		db.data[guid] = data
 	end
+end
+
+function AltManager:StoreOptions(data)
+	if not AltManager.addon_loaded then
+		return
+	end
+	-- This can happen shortly after logging in, the game doesn't know the characters guid yet
+
+	if not data then
+		return
+	end
+
+	local db = MethodAltManagerDB
+	local curr = data.currencies
+	
+	db.data = db.data or {}
+	db.options = db.options or {}
+	db.options.currencies = db.options.currencies or {}
+
+	db.options.currencies = curr
+	self.main_frame:Hide()
+	self:CreateCurrencyFrame(db.options.currencies)
+	self.unroll_button:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPLEFT", 4 + per_alt_x, -sizey - (currencies_y_add*20) +40)
+	self.main_frame:SetSize(max((MethodAltManagerDB.alts + 1) * per_alt_x, min_x_size), sizey + (currencies_y_add*20) )
+	self.main_frame.background:SetAllPoints()
+	self.main_frame:Show()
 end
 
 function AltManager:CollectData()
 
-	if UnitLevel('player') < min_level then return end;
+	if UnitLevel('player') < min_level then return end
 	
 	local name = UnitName('player')
 	local _, class = UnitClass('player')
-	local dungeon = nil;
-	local expire = nil;
-	local level = nil;
-	local seals = nil;
-	local seals_bought = nil;
-	local highest_mplus = 0;
-	local depleted = false;
+	local dungeon = nil
+	local expire = nil
+	local level = nil
+	local seals = nil
+	local seals_bought = nil
+	local highest_mplus = 0
+	local depleted = false
 
-	local guid = UnitGUID('player');
+	local guid = UnitGUID('player')
 
 	local mine_old = nil
+	local options = nil
 	if MethodAltManagerDB and MethodAltManagerDB.data then
-		mine_old = MethodAltManagerDB.data[guid];
+		mine_old = MethodAltManagerDB.data[guid]
 	end
+	if MethodAltManagerDB and MethodAltManagerDB.options then
+		options = MethodAltManagerDB.options
+	end 
 
-	C_MythicPlus.RequestRewards();
-	local l, cR, nR = C_MythicPlus.GetWeeklyChestRewardLevel();
+	C_MythicPlus.RequestRewards()
+	local l, cR, nR = C_MythicPlus.GetWeeklyChestRewardLevel()
 	if l and l > highest_mplus then
-		highest_mplus = l;
+		highest_mplus = l
 	end
 	
 	-- find keystone
-	local keystone_found = false;
+	local keystone_found = false
 	for container=BACKPACK_CONTAINER, NUM_BAG_SLOTS do
 		local slots = GetContainerNumSlots(container)
 		for slot=1, slots do
@@ -379,36 +493,36 @@ function AltManager:CollectData()
 				local itemString = slotLink:match("|Hkeystone:([0-9:]+)|h(%b[])|h")
 				local info = { strsplit(":", itemString) }
 				-- scan tooltip for depleted
-				self.main_frame.scan_tooltip:SetOwner(UIParent, 'ANCHOR_NONE');
-				self.main_frame.scan_tooltip:SetBagItem(container, slot);
-				local regions = self.main_frame.scan_tooltip:GetRegions();
+				self.main_frame.scan_tooltip:SetOwner(UIParent, 'ANCHOR_NONE')
+				self.main_frame.scan_tooltip:SetBagItem(container, slot)
+				local regions = self.main_frame.scan_tooltip:GetRegions()
 				for i = 1, self.main_frame.scan_tooltip:NumLines() do
-					local left = _G["DepletedTooltipScanTextLeft"..i]:GetText();
+					local left = _G["DepletedTooltipScanTextLeft"..i]:GetText()
 					if string.find(left, depleted_label) then
 						depleted = true
 					end
 				end
-				self.main_frame.scan_tooltip:Hide();
+				self.main_frame.scan_tooltip:Hide()
 				dungeon = tonumber(info[2])
-				if not dungeon then print("MethodAltManager - Parse Failure, please let Qoning know that this happened."); end
+				if not dungeon then print("MethodAltManager - Parse Failure, please let Qoning know that this happened.") end
 				level = tonumber(info[3])
-				if not level then print("MethodAltManager - Parse Failure, please let Qoning know that this happened."); end
+				if not level then print("MethodAltManager - Parse Failure, please let Qoning know that this happened.") end
 				expire = tonumber(info[4])
-				keystone_found = true;
+				keystone_found = true
 			end
 		end
 	end
 	if not keystone_found then
-		dungeon = "Unknown";
+		dungeon = "Unknown"
 		level = "?"
 	end
 	
 	-- Heart of Azeroth Progress
 	local heart_of_azeroth = nil
-	local azeriteItemLocation = C_AzeriteItem.FindActiveAzeriteItem(); 
+	local azeriteItemLocation = C_AzeriteItem.FindActiveAzeriteItem() 
 
 	if (azeriteItemLocation) then
-		local xp, totalLevelXP = C_AzeriteItem.GetAzeriteItemXPInfo(azeriteItemLocation);
+		local xp, totalLevelXP = C_AzeriteItem.GetAzeriteItemXPInfo(azeriteItemLocation)
 		heart_of_azeroth = {
 			['lvl'] = C_AzeriteItem.GetPowerLevel(azeriteItemLocation),
 			['xp'] = xp,
@@ -418,18 +532,9 @@ function AltManager:CollectData()
 	end
 
 	-- Process currencies 
-	i = 1
-	for cid, cobj in pairs(currencies) do
-		local label, count = GetCurrencyInfo(cid)
-		currencies[cid]= {
-			["order"] = i,
-			["label"] = label,
-			["count"] = count
-		}
-		i = i + 1;
-	end
+	self.CurrencyTable = self.CurrencyTable or self:GenerateCurrencyTable()
 
-	_, seals = GetCurrencyInfo(1580);
+	_, seals = GetCurrencyInfo(1580)
 	
 	seals_bought = 0
 
@@ -451,12 +556,12 @@ function AltManager:CollectData()
 	if marks_2 then seals_bought = seals_bought + 1 end
 
 
-	local saves = GetNumSavedInstances();
+	local saves = GetNumSavedInstances()
 	local char_table = {}
 	char_table.savedins = {}
 	for i = 1, saves do
 		local instance = {}
-		local name, iID, reset, difficultyID, _, _, instanceIDMostSig, isRaid, _, difficulty, bosses, killed_bosses = GetSavedInstanceInfo(i);
+		local name, iID, reset, difficultyID, _, _, instanceIDMostSig, isRaid, _, difficulty, bosses, killed_bosses = GetSavedInstanceInfo(i)
 		if isRaid and reset > 0 then
 			char_table.savedins[name] = char_table.savedins[name] or {}
 			char_table.savedins[name][difficultyID] = {
@@ -485,53 +590,52 @@ function AltManager:CollectData()
 
 	
 
-	local _, ilevel = GetAverageItemLevel();
+	local _, ilevel = GetAverageItemLevel()
 
 	-- store data into a table
 	
-	char_table.guid = UnitGUID('player');
-	char_table.name = name;
-	char_table.class = class;
-	char_table.ilevel = ilevel;
-	char_table.seals = seals;
-	char_table.seals_bought = seals_bought;
+	char_table.guid = UnitGUID('player')
+	char_table.name = name
+	char_table.class = class
+	char_table.ilevel = ilevel
+	char_table.seals = seals
+	char_table.seals_bought = seals_bought
 
-	char_table.dungeon = dungeon;
-	char_table.level = level;
-	char_table.heart_of_azeroth = heart_of_azeroth;
-	char_table.highest_mplus = highest_mplus;
+	char_table.dungeon = dungeon
+	char_table.level = level
+	char_table.heart_of_azeroth = heart_of_azeroth
+	char_table.highest_mplus = highest_mplus
 
-	char_table.currencies = currencies
-	char_table.is_depleted = depleted;
-	char_table.expires = self:GetNextWeeklyResetTime();
-	return char_table;
+	char_table.currencies = self.CurrencyTable
+	char_table.is_depleted = depleted
+	char_table.expires = self:GetNextWeeklyResetTime()
+	return char_table
 end
 
 function AltManager:PopulateStrings()
-	local font_height = 20;
-	local db = MethodAltManagerDB;
+	local font_height = 20
+	local db = MethodAltManagerDB
 	
 	local keyset = {}
 	for k in pairs(db.data) do
 		table.insert(keyset, k)
 	end
 	
-	self.main_frame.alt_columns = self.main_frame.alt_columns or {};
-	
+	self.main_frame.alt_columns = self.main_frame.alt_columns or {}
 	local alt = 0
 	for alt_guid, alt_data in spairs(db.data, function(t, a, b) return t[a].ilevel > t[b].ilevel end) do
 		alt = alt + 1
 		-- create the frame to which all the fontstrings anchor
-		local anchor_frame = self.main_frame.alt_columns[alt] or CreateFrame("Button", nil, self.main_frame);
+		local anchor_frame = self.main_frame.alt_columns[alt] or CreateFrame("Button", nil, self.main_frame)
 		if not self.main_frame.alt_columns[alt] then
-			self.main_frame.alt_columns[alt] = anchor_frame;
+			self.main_frame.alt_columns[alt] = anchor_frame
 		end
-		anchor_frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", per_alt_x * alt, -1);
+		anchor_frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", per_alt_x * alt, -1)
 		-- init table for fontstring storage
-		self.main_frame.alt_columns[alt].label_columns = self.main_frame.alt_columns[alt].label_columns or {};
-		local label_columns = self.main_frame.alt_columns[alt].label_columns;
+		self.main_frame.alt_columns[alt].label_columns = self.main_frame.alt_columns[alt].label_columns or {}
+		local label_columns = self.main_frame.alt_columns[alt].label_columns
 		-- create / fill fontstrings
-		local i = 1;
+		local i = 1
 		for column_iden, column in spairs(self.columns_table, function(t, a, b) return t[a].order < t[b].order end) do
 			-- only display data with values
 			if type(column.data) == "function" then
@@ -542,14 +646,14 @@ function AltManager:PopulateStrings()
 					anchor_frame,
 					-(i - 1) * font_height,
 					column.data(alt_data, i),
-					"CENTER");
+					"CENTER")
 				-- insert it into storage if just created
 				if not self.main_frame.alt_columns[alt].label_columns[i] then
-					self.main_frame.alt_columns[alt].label_columns[i] = current_row;
+					self.main_frame.alt_columns[alt].label_columns[i] = current_row
 				end
 				if column.color then
 					local color = column.color(alt_data)
-					current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1);
+					current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1)
 				end
 				current_row:SetText(column.data(alt_data, i))
 				if column.font then
@@ -558,75 +662,16 @@ function AltManager:PopulateStrings()
 					--current_row:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 14)
 				end
 				if column.justify then
-					current_row:GetFontString():SetJustifyV(column.justify);
+					current_row:GetFontString():SetJustifyV(column.justify)
 				end
 			end
 			if column.data == "currencies" then
-				if(alt_data.currencies) then
-					for cur_iden, cur in spairs(alt_data.currencies, function(t, a, b) return t[a].order < t[b].order end) do
-						local current_row = label_columns[i] or self:CreateFontFrame(
-							self.main_frame,
-							per_alt_x,
-							column.font_height or font_height,
-							anchor_frame,
-							-(i - 1) * font_height,
-							tostring(cur.count),
-							"CENTER");
-						-- insert it into storage if just created
-						if not self.main_frame.alt_columns[alt].label_columns[i] then
-							self.main_frame.alt_columns[alt].label_columns[i] = current_row;
-						end
-						if column.color then
-							local color = column.color(alt_data)
-							current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1);
-						end
-						current_row:SetText(tostring(cur.count))
-						if column.font then
-							current_row:GetFontString():SetFont(column.font, 8)
-						else
-							--current_row:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 14)
-						end
-						if column.justify then
-							current_row:GetFontString():SetJustifyV(column.justify);
-						end
-						i = i + 1
-					end
-				else
-					-- To make previous' version data compatible since those characters don't have "currencies"
-					for cur_iden, cur in spairs(currencies, function(t, a, b) return t[a].order < t[b].order end) do
-						local current_row = label_columns[i] or self:CreateFontFrame(
-							self.main_frame,
-							per_alt_x,
-							column.font_height or font_height,
-							anchor_frame,
-							-(i - 1) * font_height,
-							"0",
-							"CENTER");
-						-- insert it into storage if just created
-						if not self.main_frame.alt_columns[alt].label_columns[i] then
-							self.main_frame.alt_columns[alt].label_columns[i] = current_row;
-						end
-						if column.color then
-							local color = column.color(alt_data)
-							current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1);
-						end
-						current_row:SetText("0")
-						if column.font then
-							current_row:GetFontString():SetFont(column.font, 8)
-						else
-							--current_row:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 14)
-						end
-						if column.justify then
-							current_row:GetFontString():SetJustifyV(column.justify);
-						end
-						i = i + 1
-					end
-				end
+				i = i - 1
 			end
 			i = i + 1
 		end
 		sizey = 20 * i
-		anchor_frame:SetSize(per_alt_x, sizey);
+		anchor_frame:SetSize(per_alt_x, sizey)
 	end
 	
 end
@@ -634,13 +679,23 @@ end
 function AltManager:CreateMenu()
 
 	-- Close button
-	self.main_frame.closeButton = CreateFrame("Button", "CloseButton", self.main_frame, "UIPanelCloseButton");
+	self.main_frame.closeButton = CreateFrame("Button", "CloseButton", self.main_frame, "UIPanelCloseButton")
 	if Aurora then Aurora.Skin.UIPanelCloseButton(self.main_frame.closeButton) end
 	self.main_frame.closeButton:ClearAllPoints()
-	self.main_frame.closeButton:SetFrameLevel(self.main_frame:GetFrameLevel() + 2);
-	self.main_frame.closeButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT",Aurora and -5 or -10, Aurora and 5 or -2);
-	self.main_frame.closeButton:SetScript("OnClick", function() AltManager:HideInterface(); end);
+	self.main_frame.closeButton:SetFrameLevel(self.main_frame:GetFrameLevel() + 2)
+	self.main_frame.closeButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT",Aurora and -5 or -10, Aurora and 5 or -2)
+	self.main_frame.closeButton:SetScript("OnClick", function() AltManager:HideInterface() end)
 
+	-- Options button
+	self.main_frame.settingsButton = CreateFrame("Button", "SettingsButton", self.main_frame, "UIPanelButtonTemplate")
+	if Aurora then Aurora.Skin.UIPanelButtonTemplate(self.main_frame.settingsButton) end
+	self.main_frame.settingsButton:SetText('Conf')
+	self.main_frame.settingsButton:ClearAllPoints()
+	self.main_frame.settingsButton:SetFrameLevel(self.main_frame:GetFrameLevel() + 2)
+	self.main_frame.settingsButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT",Aurora and -50 or -50, Aurora and 5 or -2)
+	self.main_frame.settingsButton:SetScript("OnClick", function() InterfaceOptionsFrame_OpenToCategory(AltManager.MAMO) end)
+
+	local currencies = (MethodAltManagerDB.options and MethodAltManagerDB.options.currencies) or nil
 	local column_table = {
 		name = {
 			order = 1,
@@ -660,7 +715,7 @@ function AltManager:CreateMenu()
 			color = function(alt_data)
 				if not alt_data.heart_of_azeroth then return {r=255, g=0, b=0}
 				else
-					return alt_data.heart_of_azeroth.weekly and {r=0, g=255, b=0} or {r=255, g=0, b=0};
+					return alt_data.heart_of_azeroth.weekly and {r=0, g=255, b=0} or {r=255, g=0, b=0}
 				end
 			end,
 			data = function(alt_data)
@@ -693,7 +748,10 @@ function AltManager:CreateMenu()
 		currencies = {
 			order = 8,
 			data = "currencies",
-			currency_function = function(currencies) end,
+			currency_function = function(currencies)
+				self.currency_list = self.currency_list or {}
+				self:CreateCurrencyFrame(currencies)
+			end,
 		},
 		dummy_empty_line = {
 			order = 11,
@@ -704,56 +762,57 @@ function AltManager:CreateMenu()
 			data = "unroll",
 			name = "+ Instances",
 			unroll_function = function(button)
-				self.instances_unroll = self.instances_unroll or {};
-				self.instances_unroll.state = self.instances_unroll.state or "closed";
+				self.instances_unroll = self.instances_unroll or {}
+				self.instances_unroll.state = self.instances_unroll.state or "closed"
 				if self.instances_unroll.state == "closed" then
 					self:CreateUnrollFrame()
-					button:SetText("-  Instances");
-					self.instances_unroll.state = "open";
+					button:SetText("-  Instances")
+					self.instances_unroll.state = "open"
 				else
 					-- do rollup
-					self.main_frame:SetSize(max((MethodAltManagerDB.alts + 1) * per_alt_x, min_x_size), sizey);
-					self.main_frame.background:SetAllPoints();
-					self.instances_unroll.unroll_frame:Hide();
-					button:SetText("+  Instances");
-					self.instances_unroll.state = "closed";
+					self.main_frame:SetSize(max((MethodAltManagerDB.alts + 1) * per_alt_x, min_x_size), sizey + (currencies_y_add*20) )
+					self.main_frame.background:SetAllPoints()
+					self.instances_unroll.unroll_frame:Hide()
+					button:SetText("+  Instances")
+					self.instances_unroll.state = "closed"
 				end
 			end
 		}
 	}
-	self.columns_table = column_table;
-
+	self.columns_table = column_table
+	self.main_frame.currency_start = self.main_frame.lowest_point
 	-- create labels and unrolls
-	local font_height = 20;
-	local label_column = self.main_frame.label_column or CreateFrame("Button", nil, self.main_frame);
-	if not self.main_frame.label_column then self.main_frame.label_column = label_column; end
-	label_column:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, -1);
+	local font_height = 20
+	local label_column = self.main_frame.label_column or CreateFrame("Button", nil, self.main_frame)
+	if not self.main_frame.label_column then self.main_frame.label_column = label_column end
+	label_column:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, -1)
 
-	local i = 1;
+	local i = 1
 	for row_iden, row in spairs(self.columns_table, function(t, a, b) return t[a].order < t[b].order end) do
 		if row.label then
-			local label_row = self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, row.label..":", "RIGHT");
-			self.main_frame.lowest_point = -(i-1)*font_height;
+			local label_row = self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, row.label..":", "RIGHT")
+			self.main_frame.lowest_point = -(i-1)*font_height
 		end
 		if row.data == "unroll" then
 			-- create a button that will unroll it
-			local unroll_button = CreateFrame("Button", nil, self.main_frame, "UIPanelButtonTemplate");
-			unroll_button:SetText(row.name);
-			unroll_button:SetFrameLevel(self.main_frame:GetFrameLevel() + 2);
-			unroll_button:SetSize(unroll_button:GetTextWidth() + 20, 25);
-			unroll_button:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPLEFT", 4 + per_alt_x, -(i-1)*font_height-10);
+			self.unroll_button = CreateFrame("Button", nil, self.main_frame, "UIPanelButtonTemplate")
+			local unroll_button = self.unroll_button
+			unroll_button:SetText(row.name)
+			unroll_button:SetFrameLevel(self.main_frame:GetFrameLevel() + 2)
+			unroll_button:SetSize(unroll_button:GetTextWidth() + 20, 25)
+			unroll_button:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPLEFT", 4 + per_alt_x, -(i-1)*font_height-10)
 			
 			if Aurora then Aurora.Skin.UIPanelButtonTemplate(unroll_button) end
-			unroll_button:SetScript("OnClick", function() row.unroll_function(unroll_button) end);
+			unroll_button:SetScript("OnClick", function() row.unroll_function(unroll_button) end)
 
-			local tierDropDown = CreateFrame("Frame", nil, self.main_frame, "UIDropDownMenuTemplate")
+			local tierDropDown = CreateFrame("Frame", nil, self.currency_list.frame, "UIDropDownMenuTemplate")
 			if Aurora then Aurora.Skin.UIDropDownMenuTemplate(tierDropDown) end
-			-- obj:SetPoint(point, relativeTo, relativePoint, ofsx, ofsy);
-			tierDropDown:SetPoint("LEFT", unroll_button, "RIGHT");
+			-- obj:SetPoint(point, relativeTo, relativePoint, ofsx, ofsy)
+			tierDropDown:SetPoint("LEFT", unroll_button, "RIGHT")
 			UIDropDownMenu_SetWidth(tierDropDown, 130) -- Use in place of dropDown:SetWidth
 			UIDropDownMenu_SetText(tierDropDown, EJ_GetTierInfo(favoriteTier))
 			UIDropDownMenu_Initialize(tierDropDown, AltManagerDropDown_Menu)
-			self.main_frame.lowest_point = -(i-1)*font_height-10;
+			self.main_frame.lowest_point = -(i-1)*font_height-10
 
 			function tierDropDown:SetTier(newValue)
 				-- Change Encounter Journal to correct expansion
@@ -763,55 +822,172 @@ function AltManager:CreateMenu()
 				-- Set correct value to dropdown menu
 				UIDropDownMenu_SetText(tierDropDown, EJ_GetTierInfo(favoriteTier))
 				-- Close the entire menu
-				CloseDropDownMenus();
+				CloseDropDownMenus()
 
 				-- Update unroll
-				AltManager.instances_unroll = AltManager.instances_unroll or {};
-				AltManager.instances_unroll.state = "closed";
+				AltManager.instances_unroll = AltManager.instances_unroll or {}
+				AltManager.instances_unroll.state = "closed"
 				row.unroll_function(unroll_button)
 			end
 		end
 		if row.data == "currencies" then
-			for cur_iden, cur in spairs(currencies, function(t, a, b) return t[a].order < t[b].order end) do
-				if cur.label then
-					self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, cur.label..":", "RIGHT");
-					self.main_frame.lowest_point = -(i-1)*font_height;
-				end
-				i = i + 1
+			if currencies then
+				self.main_frame.currency_start = self.main_frame.lowest_point
+				row.currency_function(currencies)
 			end
+			i = i + tablelength(currencies) 
 		end
 		i = i + 1
 	end
 	sizey = i * 20
-	label_column:SetSize(per_alt_x, sizey);
+	label_column:SetSize(per_alt_x, sizey)
 end
 
-function AltManager:CreateCurrencyFrame()
+function AltManager:CreateCurrencyFrame(currencies)
+	local list_size = tablelength(currencies)
+	self.currency_list.frame = self.currency_list.frame or CreateFrame("Button", nil, self.main_frame)
+	self.currency_list.frame:SetSize(per_alt_x, currencies_y_add*20)
+	self.currency_list.frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.currency_start-20)
+	self.currency_list.frame:Show()
+	local font_height = 20
+	if not self.currency_list.labels or tablelength(self.currency_list.labels) == 0 then
+		print('test')
+		self.currency_list.labels = {}
+		local i = 1
+		for cur_iden, cur in spairs(currencies, function(t, a, b) return t[a].order < t[b].order end) do
+			if cur.label then
+				local label_row = self:CreateFontFrame(self.currency_list.frame, per_alt_x, font_height, self.currency_list.frame, -(i-1)*font_height, cur.label..":", "RIGHT")
+				table.insert(self.currency_list.labels, label_row)
+				self.main_frame.lowest_point = -(i-1)*font_height
+			end
+			i = i + 1
+		end
+		currencies_y_add = i
+	elseif tablelength(currencies) == 0 then
+		local idx, v = next(self.currency_list.labels,idx)
+		if(v) then
+			v:Hide()
+		end
+		while idx do
+			idx, v = next(self.currency_list.labels,idx)
+			if(v) then
+				v:Hide()
+			end
+		end
+	else
+		local i = 1
+		local idx, v = nil,nil
+		for cur_iden, cur in spairs(currencies, function(t, a, b) return t[a].order < t[b].order end) do
+			if cur.label then
+				local tempIdx = idx
+				idx, v = next(self.currency_list.labels,idx)
+				if not (idx) then
+					local label_row = self:CreateFontFrame(self.currency_list.frame, per_alt_x, font_height, self.currency_list.frame, -(i-1)*font_height, cur.label..":", "RIGHT")
+					table.insert(self.currency_list.labels, label_row)
+					idx = tempIdx + 1 
+				else
+					v:SetText(cur.label..":")
+					v:Show()
+				end
+			end
+			i = i + 1
+		end
+		while idx do
+			idx, v = next(self.currency_list.labels,idx)
+			if(v) then
+				v:Hide()
+			end
+		end
+		currencies_y_add = i
+	end
 
+	-- populate it for alts
+	self.currency_list.alt_columns = self.currency_list.alt_columns or {}
+	local alt = 0
+	local db = MethodAltManagerDB
+
+	for alt_guid, alt_data in spairs(db.data, function(t, a, b) return t[a].ilevel > t[b].ilevel end) do
+		alt = alt + 1
+		-- create the frame to which all the fontstrings anchor
+		local anchor_frame = self.currency_list.alt_columns[alt] or CreateFrame("Button", nil, self.currency_list.frame)
+		if not self.currency_list.alt_columns[alt] then
+			self.currency_list.alt_columns[alt] = anchor_frame
+		end
+		anchor_frame:SetPoint("TOPLEFT", self.currency_list.frame, "TOPLEFT", per_alt_x * alt, -1)
+		anchor_frame:SetSize(per_alt_x, instances_y_add*20)
+		-- init table for fontstring storage
+		self.currency_list.alt_columns[alt].label_columns = self.currency_list.alt_columns[alt].label_columns or {}
+		local label_columns = self.currency_list.alt_columns[alt].label_columns
+		-- create / fill fontstrings
+		local i = 1
+		local alt_currencies = filterCurrencies(alt_data.currencies)
+		--print_table(alt_currencies)
+		if not (next(alt_currencies) == nil) then
+			for cur_iden, cur in spairs(alt_currencies, function(t, a, b) return t[a].order < t[b].order end) do
+				local current_row = label_columns[i] or self:CreateFontFrame(
+					self.main_frame,
+					per_alt_x,
+					cur.font_height or font_height,
+					anchor_frame,
+					-(i - 1) * font_height,
+					tostring(cur.count),
+					"CENTER")
+				-- insert it into storage if just created
+				if not self.currency_list.alt_columns[alt].label_columns[i] then
+					self.currency_list.alt_columns[alt].label_columns[i] = current_row
+				end
+				if cur.color then
+					local color = cur.color(alt_data)
+					current_row:GetFontString():SetTextColor(color.r, color.g, color.b, 1)
+				end
+				current_row:SetText(cur.count or '-')
+				if cur.font then
+					current_row:GetFontString():SetFont(cur.font, 8)
+				else
+					--current_row:GetFontString():SetFont("Fonts\\FRIZQT__.TTF", 14)
+				end
+				if cur.justify then
+					current_row:GetFontString():SetJustifyV(cur.justify)
+				end
+				-- current_row:SetText(cur.data(alt_data, i))
+				current_row:Show()
+				i = i + 1
+			end
+		end
+		i = i-1
+		for idx, col  in pairs(self.currency_list.alt_columns[alt].label_columns) do
+			if (idx > i) then
+				col:Hide()
+			end
+		end
+	end
+	-- fixup the background
+	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey )
+	self.main_frame.background:SetAllPoints()
 end
 
 function AltManager:CreateUnrollFrame()
-	local my_rows = nil;
+	local my_rows = nil
 	if (raids[favoriteTier]) then
-		my_rows = raids[favoriteTier];
+		my_rows = raids[favoriteTier]
 	else
-		self:GenerateRaidData();
-		my_rows = raids[favoriteTier];
+		self:GenerateRaidData()
+		my_rows = raids[favoriteTier]
 	end
 	-- do unroll
-	self.instances_unroll.unroll_frame = self.instances_unroll.unroll_frame or CreateFrame("Button", nil, self.main_frame);
-	self.instances_unroll.unroll_frame:SetSize(per_alt_x, instances_y_add*20);
-	self.instances_unroll.unroll_frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.lowest_point - 10);
-	self.instances_unroll.unroll_frame:Show();
+	self.instances_unroll.unroll_frame = self.instances_unroll.unroll_frame or CreateFrame("Button", nil, self.main_frame)
+	self.instances_unroll.unroll_frame:SetSize(per_alt_x, instances_y_add*20)
+	self.instances_unroll.unroll_frame:SetPoint("TOPLEFT", self.currency_list.frame, "TOPLEFT", 4, -currencies_y_add*20-40)
+	self.instances_unroll.unroll_frame:Show()
 	
-	local font_height = 20;
+	local font_height = 20
 	-- create the rows for the unroll
 	if not self.instances_unroll.labels then
-		self.instances_unroll.labels = {};
+		self.instances_unroll.labels = {}
 		local i = 1
 		for row_iden, row in spairs(my_rows, function(t, a, b) return t[a].order < t[b].order end) do
 			if row.label then
-				local label_row = self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, font_height, self.instances_unroll.unroll_frame, -(i-1)*font_height, row.label, "RIGHT");
+				local label_row = self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, font_height, self.instances_unroll.unroll_frame, -(i-1)*font_height, row.label, "RIGHT")
 				table.insert(self.instances_unroll.labels, label_row)
 			end
 			i = i + 1
@@ -825,7 +1001,7 @@ function AltManager:CreateUnrollFrame()
 				local tempIdx = idx
 				idx, v = next(self.instances_unroll.labels,idx)
 				if not (idx) then
-					local label_row = self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, font_height, self.instances_unroll.unroll_frame, -(i-1)*font_height, row.label, "RIGHT");
+					local label_row = self:CreateFontFrame(self.instances_unroll.unroll_frame, per_alt_x, font_height, self.instances_unroll.unroll_frame, -(i-1)*font_height, row.label, "RIGHT")
 					table.insert(self.instances_unroll.labels, label_row)
 					idx = tempIdx + 1 
 				else
@@ -845,23 +1021,23 @@ function AltManager:CreateUnrollFrame()
 	end
 	
 	-- populate it for alts
-	self.instances_unroll.alt_columns = self.instances_unroll.alt_columns or {};
+	self.instances_unroll.alt_columns = self.instances_unroll.alt_columns or {}
 	local alt = 0
-	local db = MethodAltManagerDB;
+	local db = MethodAltManagerDB
 	for alt_guid, alt_data in spairs(db.data, function(t, a, b) return t[a].ilevel > t[b].ilevel end) do
 		alt = alt + 1
 		-- create the frame to which all the fontstrings anchor
-		local anchor_frame = self.instances_unroll.alt_columns[alt] or CreateFrame("Button", nil, self.instances_unroll.unroll_frame);
+		local anchor_frame = self.instances_unroll.alt_columns[alt] or CreateFrame("Button", nil, self.instances_unroll.unroll_frame)
 		if not self.instances_unroll.alt_columns[alt] then
-			self.instances_unroll.alt_columns[alt] = anchor_frame;
+			self.instances_unroll.alt_columns[alt] = anchor_frame
 		end
-		anchor_frame:SetPoint("TOPLEFT", self.instances_unroll.unroll_frame, "TOPLEFT", per_alt_x * alt, -1);
-		anchor_frame:SetSize(per_alt_x, instances_y_add*20);
+		anchor_frame:SetPoint("TOPLEFT", self.instances_unroll.unroll_frame, "TOPLEFT", per_alt_x * alt, -1)
+		anchor_frame:SetSize(per_alt_x, instances_y_add*20)
 		-- init table for fontstring storage
-		self.instances_unroll.alt_columns[alt].label_columns = self.instances_unroll.alt_columns[alt].label_columns or {};
-		local label_columns = self.instances_unroll.alt_columns[alt].label_columns;
+		self.instances_unroll.alt_columns[alt].label_columns = self.instances_unroll.alt_columns[alt].label_columns or {}
+		local label_columns = self.instances_unroll.alt_columns[alt].label_columns
 		-- create / fill fontstrings
-		local i = 1;
+		local i = 1
 		for column_iden, column in spairs(my_rows, function(t, a, b) return t[a].order < t[b].order end) do
 			local current_row = 
 				label_columns[i] or self:CreateFontFrame(
@@ -870,45 +1046,44 @@ function AltManager:CreateUnrollFrame()
 					column.font_height or font_height,
 					anchor_frame, -(i - 1) * font_height,
 					column.data(alt_data,i),
-					"CENTER");
+					"CENTER")
 			-- insert it into storage if just created
 			if not self.instances_unroll.alt_columns[alt].label_columns[i] then
-				self.instances_unroll.alt_columns[alt].label_columns[i] = current_row;
+				self.instances_unroll.alt_columns[alt].label_columns[i] = current_row
 			end
-			current_row:SetText(column.data(alt_data, i));
-			current_row:Show();
+			current_row:SetText(column.data(alt_data, i))
+			current_row:Show()
 			i = i + 1
 		end
 		i = i-1
 		for idx, col  in pairs(self.instances_unroll.alt_columns[alt].label_columns) do
 			if (idx > i) then
-				col:Hide();
+				col:Hide()
 			end
 		end
 	end
 
 	-- fixup the background
-	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey + (instances_y_add*20));
-	self.main_frame.background:SetAllPoints();
+	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey + (currencies_y_add*20) + (instances_y_add*20))
+	self.main_frame.background:SetAllPoints()
 end
 
 function AltManagerDropDown_Menu(frame, level, menuList)
-	local info = UIDropDownMenu_CreateInfo();
-	local lenTiers = EJ_GetNumTiers();
+	local info = UIDropDownMenu_CreateInfo()
+	local lenTiers = EJ_GetNumTiers()
 	for i=1, lenTiers do
-		info.text = EJ_GetTierInfo(i);
+		info.text = EJ_GetTierInfo(i)
 		info.func = frame.SetTier
-		info.checked = i ==  EJ_GetCurrentTier();
-		info.arg1 = i;
+		info.checked = i ==  EJ_GetCurrentTier()
+		info.arg1 = i
 		UIDropDownMenu_AddButton(info, level)
 	end
 end
 
 function AltManager:MakeHoAString(data)
-	print(data,"---")
-	if not data then return "-" end;
-	if not data.heart_of_azeroth then return "-" end;
-	return tostring(data.lvl) .. "(" .. tostring(data.xp/data.totalXP) .. ")";
+	if not data then return "-" end
+	if not data.heart_of_azeroth then return "-" end
+	return tostring(data.lvl) .. "(" .. tostring(data.xp/data.totalXP) .. ")"
 end
 
 function AltManager:MakeRaidString(data,i)
@@ -916,111 +1091,111 @@ function AltManager:MakeRaidString(data,i)
 	if not i then return "-" end
 	local string = ""
 	local legacy = 0
-	local raid = data[self.instances_unroll.labels[i]:GetText()];
+	local raid = data[self.instances_unroll.labels[i]:GetText()]
 	if raid then
 		for difi, iobj in pairs(raid) do
 			if difi == 14 then -- "Normal" (Raids)
-				string = string .. tostring(iobj[4]) .. "N";
+				string = string .. tostring(iobj[4]) .. "N"
 			elseif difi == 15 then -- "Heroic" (Raids)
-				string = string .. tostring(iobj[4]) .. "H";
+				string = string .. tostring(iobj[4]) .. "H"
 			elseif difi == 16 then -- "Mythic" (Raids)
-				string = string .. tostring(iobj[4]) .. "M";
+				string = string .. tostring(iobj[4]) .. "M"
 			elseif difi == 17 then -- "Looking For Raid"
-				string = string .. tostring(iobj[4]) .. "L";
+				string = string .. tostring(iobj[4]) .. "L"
 			else -- Legacy raids	
-				legacy = legacy + iobj[4];
+				legacy = legacy + iobj[4]
 			end
 		end
 	else
 		return "-"
 	end
 	if legacy > 0 then
-		return tostring(legacy);
+		return tostring(legacy)
 	else
-		return string;
+		return string
 	end
 end
 
 function AltManager:HideInterface()
-	self.main_frame:Hide();
+	self.main_frame:Hide()
 end
 
 function AltManager:ShowInterface()
-	self.main_frame:Show();
+	self.main_frame:Show()
 	self:StoreData(self:CollectData())
-	self:PopulateStrings();
+	self:PopulateStrings()
 end
 
 function AltManager:MakeTopBottomTextures(frame)
 	if frame.bottomPanel == nil then
-		frame.bottomPanel = frame:CreateTexture(nil);
+		frame.bottomPanel = frame:CreateTexture(nil)
 	end
 	if frame.topPanel == nil then
-		frame.topPanel = CreateFrame("Frame", "AltManagerTopPanel", frame);
-		frame.topPanelTex = frame.topPanel:CreateTexture(nil, "BACKGROUND");
-		local logo = frame.topPanel:CreateTexture("logo","ARTWORK");
-		logo:SetPoint("TOPLEFT");
-		logo:SetTexture("Interface\\AddOns\\MethodAltManager\\Media\\AltManager64");
-		frame.topPanelTex:SetAllPoints();
-		frame.topPanelTex:SetDrawLayer("ARTWORK", -5);
-		frame.topPanelTex:SetColorTexture(0, 0, 0, 0.7);
+		frame.topPanel = CreateFrame("Frame", "AltManagerTopPanel", frame)
+		frame.topPanelTex = frame.topPanel:CreateTexture(nil, "BACKGROUND")
+		local logo = frame.topPanel:CreateTexture("logo","ARTWORK")
+		logo:SetPoint("TOPLEFT")
+		logo:SetTexture("Interface\\AddOns\\MethodAltManager\\Media\\AltManager64")
+		frame.topPanelTex:SetAllPoints()
+		frame.topPanelTex:SetDrawLayer("ARTWORK", -5)
+		frame.topPanelTex:SetColorTexture(0, 0, 0, 0.7)
 		
-		frame.topPanelString = frame.topPanel:CreateFontString("Method name");
+		frame.topPanelString = frame.topPanel:CreateFontString("Method name")
 		frame.topPanelString:SetFont("Fonts\\FRIZQT__.TTF", 20)
-		frame.topPanelString:SetTextColor(1, 1, 1, 1);
+		frame.topPanelString:SetTextColor(1, 1, 1, 1)
 		frame.topPanelString:SetJustifyH("CENTER")
 		frame.topPanelString:SetJustifyV("CENTER")
 		frame.topPanelString:SetWidth(260)
 		frame.topPanelString:SetHeight(20)
-		frame.topPanelString:SetText("Method Alt Manager");
-		frame.topPanelString:ClearAllPoints();
-		frame.topPanelString:SetPoint("CENTER", frame.topPanel, "CENTER", 0, 0);
-		frame.topPanelString:Show();
+		frame.topPanelString:SetText("Method Alt Manager")
+		frame.topPanelString:ClearAllPoints()
+		frame.topPanelString:SetPoint("CENTER", frame.topPanel, "CENTER", 0, 0)
+		frame.topPanelString:Show()
 		
 	end
-	frame.bottomPanel:SetColorTexture(0, 0, 0, 0.7);
-	frame.bottomPanel:ClearAllPoints();
-	frame.bottomPanel:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, 0);
-	frame.bottomPanel:SetSize(frame:GetWidth(), 30);
-	frame.bottomPanel:SetDrawLayer("ARTWORK", 7);
+	frame.bottomPanel:SetColorTexture(0, 0, 0, 0.7)
+	frame.bottomPanel:ClearAllPoints()
+	frame.bottomPanel:SetPoint("TOPLEFT", frame, "BOTTOMLEFT", 0, 0)
+	frame.bottomPanel:SetSize(frame:GetWidth(), 30)
+	frame.bottomPanel:SetDrawLayer("ARTWORK", 7)
 
-	frame.topPanel:ClearAllPoints();
-	frame.topPanel:SetSize(frame:GetWidth(), 30);
-	frame.topPanel:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 0);
+	frame.topPanel:ClearAllPoints()
+	frame.topPanel:SetSize(frame:GetWidth(), 30)
+	frame.topPanel:SetPoint("BOTTOMLEFT", frame, "TOPLEFT", 0, 0)
 
-	frame:SetMovable(true);
-	frame.topPanel:EnableMouse(true);
-	frame.topPanel:RegisterForDrag("LeftButton");
+	frame:SetMovable(true)
+	frame.topPanel:EnableMouse(true)
+	frame.topPanel:RegisterForDrag("LeftButton")
 	frame.topPanel:SetScript("OnDragStart", function(self,button)
-		frame:SetMovable(true);
-        frame:StartMoving();
-    end);
+		frame:SetMovable(true)
+        frame:StartMoving()
+    end)
 	frame.topPanel:SetScript("OnDragStop", function(self,button)
-        frame:StopMovingOrSizing();
-		frame:SetMovable(false);
-    end);
+        frame:StopMovingOrSizing()
+		frame:SetMovable(false)
+    end)
 end
 
 function AltManager:MakeBorderPart(frame, x, y, xoff, yoff, part)
 	if part == nil then
-		part = frame:CreateTexture(nil);
+		part = frame:CreateTexture(nil)
 	end
-	part:SetTexture(0, 0, 0, 1);
-	part:ClearAllPoints();
-	part:SetPoint("TOPLEFT", frame, "TOPLEFT", xoff, yoff);
-	part:SetSize(x, y);
-	part:SetDrawLayer("ARTWORK", 7);
-	return part;
+	part:SetTexture(0, 0, 0, 1)
+	part:ClearAllPoints()
+	part:SetPoint("TOPLEFT", frame, "TOPLEFT", xoff, yoff)
+	part:SetSize(x, y)
+	part:SetDrawLayer("ARTWORK", 7)
+	return part
 end
 
 function AltManager:MakeBorder(frame, size)
 	if size == 0 then
-		return;
+		return
 	end
-	frame.borderTop = self:MakeBorderPart(frame, frame:GetWidth(), size, 0, 0, frame.borderTop); -- top
-	frame.borderLeft = self:MakeBorderPart(frame, size, frame:GetHeight(), 0, 0, frame.borderLeft); -- left
-	frame.borderBottom = self:MakeBorderPart(frame, frame:GetWidth(), size, 0, -frame:GetHeight() + size, frame.borderBottom); -- bottom
-	frame.borderRight = self:MakeBorderPart(frame, size, frame:GetHeight(), frame:GetWidth() - size, 0, frame.borderRight); -- right
+	frame.borderTop = self:MakeBorderPart(frame, frame:GetWidth(), size, 0, 0, frame.borderTop) -- top
+	frame.borderLeft = self:MakeBorderPart(frame, size, frame:GetHeight(), 0, 0, frame.borderLeft) -- left
+	frame.borderBottom = self:MakeBorderPart(frame, frame:GetWidth(), size, 0, -frame:GetHeight() + size, frame.borderBottom) -- bottom
+	frame.borderRight = self:MakeBorderPart(frame, size, frame:GetHeight(), frame:GetWidth() - size, 0, frame.borderRight) -- right
 end
 
 -- shamelessly stolen from saved instances
@@ -1119,20 +1294,20 @@ function AltManager:GetRegion()
 end
 
 function AltManager:GetWoWDate()
-	local hour = tonumber(tonumber(date("%H")));
-	local day = tonumber(C_Calendar.GetDate()["weekday"]);
-	return day, hour;
+	local hour = tonumber(tonumber(date("%H")))
+	local day = tonumber(C_Calendar.GetDate()["weekday"])
+	return day, hour
 end
 
 function AltManager:TimeString(length)
 	if length == 0 then
-		return "Now";
+		return "Now"
 	end
 	if length < 3600 then
-		return string.format("%d mins", length / 60);
+		return string.format("%d mins", length / 60)
 	end
 	if length < 86400 then
-		return string.format("%d hrs %d mins", length / 3600, (length % 3600) / 60);
+		return string.format("%d hrs %d mins", length / 3600, (length % 3600) / 60)
 	end
-	return string.format("%d days %d hrs", length / 86400, (length % 86400) / 3600);
+	return string.format("%d days %d hrs", length / 86400, (length % 86400) / 3600)
 end
