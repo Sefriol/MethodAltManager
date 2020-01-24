@@ -157,7 +157,8 @@ do
 		end
 		if event == "PLAYER_LOGIN" then
 			AltManager:OnLogin()
-			AltManager:MAMO_INIT()
+			AltManager:MAMO_CURR_INIT()
+			AltManager:MAMO_ITEMS_INIT()
 		end
 		if event == "AZERITE_ITEM_EXPERIENCE_CHANGED" then
 			local data = AltManager:CollectData()

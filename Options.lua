@@ -307,39 +307,51 @@ local function CreateListFrame(parent, w, h, cols)
 	frame:Update()
 	return frame
 end
-local VarTable = {}
 
-addon.MAMO = CreateFrame('Frame', nil, InterfaceOptionsFramePanelContainer)
-local ListFrame = CreateListFrame(addon.MAMO, 615, 465, {{'Id', 50}, {'Name', 260, 'LEFT'}, {'Count', 100, 'RIGHT'},{'Order', 50, 'RIGHT'}})
+local CurrencyVarTable = {}
+
+local MainOptionsPage = CreateFrame('Frame', nil, InterfaceOptionsFramePanelContainer)
+MainOptionsPage:Hide()
+MainOptionsPage:SetAllPoints()
+MainOptionsPage.name = addonName
+InterfaceOptions_AddCategory(MainOptionsPage, addonName)
+
+
+
+addon.MAMO_CURR = CreateFrame('Frame', nil, InterfaceOptionsFramePanelContainer)
+local CurrencyListFrame = CreateListFrame(addon.MAMO_CURR, 615, 465, {{'Id', 50}, {'Name', 260, 'LEFT'}, {'Count', 100, 'RIGHT'},{'Order', 50, 'RIGHT'}})
 --ListFrame:SetPoint('TOP', FilterBox, 'BOTTOM', 0, -20)
-ListFrame:SetPoint('BOTTOMLEFT', 4, 6)
-ListFrame:SetItems(VarTable)
+CurrencyListFrame:SetPoint('BOTTOMLEFT', 4, 6)
+CurrencyListFrame:SetItems(CurrencyVarTable)
 
-ListFrame.Bg:SetAlpha(0.8)
+CurrencyListFrame.Bg:SetAlpha(0.8)
 
 --FilterBox:SetMaxLetters(100)
-addon.MAMO:Hide()
-addon.MAMO:SetAllPoints()
-addon.MAMO.name = addonName
-local Title = addon.MAMO:CreateFontString(nil, 'ARTWORK', 'GameFontNormalLarge')
-Title:SetJustifyV('TOP')
-Title:SetJustifyH('LEFT')
-Title:SetPoint('TOPLEFT', 16, -16)
-Title:SetText(addon.MAMO.name)
+addon.MAMO_CURR:Hide()
+addon.MAMO_CURR:SetAllPoints()
+addon.MAMO_CURR.name = 'Currencies'
+addon.MAMO_CURR.parent = addonName
+local CurrencyTitle = addon.MAMO_CURR:CreateFontString(nil, 'ARTWORK', 'GameFontNormalLarge')
+CurrencyTitle:SetJustifyV('TOP')
+CurrencyTitle:SetJustifyH('LEFT')
+CurrencyTitle:SetPoint('TOPLEFT', 16, -16)
+CurrencyTitle:SetText(addon.MAMO_CURR.name)
 
-local SubText = addon.MAMO:CreateFontString(nil, 'ARTWORK', 'GameFontHighlightSmall')
-SubText:SetMaxLines(3)
-SubText:SetNonSpaceWrap(true)
-SubText:SetJustifyV('TOP')
-SubText:SetJustifyH('LEFT')
-SubText:SetPoint('TOPLEFT', Title, 'BOTTOMLEFT', 0, -8)
-SubText:SetPoint('RIGHT', -32, 0)
-SubText:SetText('This Page allows you to setup trackable items and currencies.')
-InterfaceOptions_AddCategory(addon.MAMO, addonName)
+local CurrencySubText = addon.MAMO_CURR:CreateFontString(nil, 'ARTWORK', 'GameFontHighlightSmall')
+CurrencySubText:SetMaxLines(3)
+CurrencySubText:SetNonSpaceWrap(true)
+CurrencySubText:SetJustifyV('TOP')
+CurrencySubText:SetJustifyH('LEFT')
+CurrencySubText:SetPoint('TOPLEFT', CurrencyTitle, 'BOTTOMLEFT', 0, -8)
+CurrencySubText:SetPoint('RIGHT', -32, 0)
+CurrencySubText:SetText('This Page allows you to setup trackable items and currencies.')
+InterfaceOptions_AddCategory(addon.MAMO_CURR, addonName)
 
 
-function RefreshList()
-    wipe(VarTable)
+
+
+function RefreshCurrencyList()
+    wipe(CurrencyVarTable)
 	local options = MethodAltManagerDB.options
     for cid, cobj in pairs(addon.CurrencyTable) do  
         if(options and options.currencies and options.currencies[cid])then
@@ -347,21 +359,21 @@ function RefreshList()
         else 
             order = math.huge
         end
-        tinsert(VarTable, {cid, cid, cobj.label, cobj.count, order})
+        tinsert(CurrencyVarTable, {cid, cid, cobj.label, cobj.count, order})
     end
 end
 
-function addon:MAMO_INIT()
+function addon:MAMO_CURR_INIT()
     local options = MethodAltManagerDB.options
-    RefreshList()
-	ListFrame:SetItems(VarTable)
-	ListFrame:SortBy(5)
+    RefreshCurrencyList()
+	CurrencyListFrame:SetItems(CurrencyVarTable)
+	CurrencyListFrame:SortBy(5)
 	--FilterCurrencyList() -- Maybe in the future
 
 	-- We don't really want the user to be able to do anything else while the input box is open
 	-- I'd rather make this a child of the input box, but I can't get it to show up above its child
 	-- todo: show default value around the input box somewhere while it's active
-	local CurrencyInputBoxMouseBlocker = CreateFrame('frame', nil, ListFrame)
+	local CurrencyInputBoxMouseBlocker = CreateFrame('frame', nil, CurrencyListFrame)
 	CurrencyInputBoxMouseBlocker:SetFrameStrata('FULLSCREEN_DIALOG')
 	CurrencyInputBoxMouseBlocker:Hide()
 
@@ -405,10 +417,10 @@ function addon:MAMO_INIT()
 		options = MethodAltManagerDB.options
 		
 		self:Hide()
-		RefreshList()
-		ListFrame:SetItems(VarTable)
-		ListFrame:SortBy(5)
-		ListFrame:SortBy(5)
+		RefreshCurrencyList()
+		CurrencyListFrame:SetItems(CurrencyVarTable)
+		CurrencyListFrame:SortBy(5)
+		CurrencyListFrame:SortBy(5)
 	end)
 	CurrencyInputBox:SetScript('OnShow', function(self)
 		self:SetFocus()
@@ -426,7 +438,7 @@ function addon:MAMO_INIT()
 
 
 	local LastClickTime = 0 -- Track double clicks on rows
-	ListFrame:SetScripts({
+	CurrencyListFrame:SetScripts({
 		OnEnter = function(self)
 			if self.value ~= '' then
 				GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
@@ -462,6 +474,229 @@ function addon:MAMO_INIT()
 				CurrencyInputBoxMouseBlocker:Show()
 				CurrencyInputBox:Show()
 				CurrencyInputBox:SetFocus()
+			else
+				LastClickTime = now
+			end
+		end,
+	})
+end
+local ItemsVarTable = {}
+
+addon.MAMO_ITEMS = CreateFrame('Frame', nil, InterfaceOptionsFramePanelContainer)
+local ItemListFrame = CreateListFrame(addon.MAMO_ITEMS, 615, 465, {{'Id', 50}, {'Name', 260, 'LEFT'},{'Order', 50, 'RIGHT'}})
+ItemListFrame:SetPoint('BOTTOMLEFT', 4, 6)
+ItemListFrame:SetItems(ItemsVarTable)
+
+ItemListFrame.Bg:SetAlpha(0.8)
+
+local function OptionStoreItem(item)
+	local options = MethodAltManagerDB.options
+	options.items = options.items or {}
+	if options.items[item.ID] then
+		options.items[item.ID] = nil
+	else
+		options.items[item.ID] = item
+	end
+	addon:StoreOptions(options)
+	options = MethodAltManagerDB.options
+	
+	RefreshItemList()
+	ItemListFrame:SetItems(ItemsVarTable)
+	ItemListFrame:SortBy(5)
+	ItemListFrame:SortBy(5)
+end
+
+--FilterBox:SetMaxLetters(100)
+addon.MAMO_ITEMS:Hide()
+addon.MAMO_ITEMS:SetAllPoints()
+addon.MAMO_ITEMS.name = 'Items'
+addon.MAMO_ITEMS.parent = addonName
+local ItemsTitle = addon.MAMO_ITEMS:CreateFontString(nil, 'ARTWORK', 'GameFontNormalLarge')
+ItemsTitle:SetJustifyV('TOP')
+ItemsTitle:SetJustifyH('LEFT')
+ItemsTitle:SetPoint('TOPLEFT', 16, -16)
+ItemsTitle:SetText(addon.MAMO_ITEMS.name)
+
+local ItemsSubText = addon.MAMO_ITEMS:CreateFontString(nil, 'ARTWORK', 'GameFontHighlightSmall')
+ItemsSubText:SetMaxLines(3)
+ItemsSubText:SetNonSpaceWrap(true)
+ItemsSubText:SetJustifyV('TOP')
+ItemsSubText:SetJustifyH('LEFT')
+ItemsSubText:SetPoint('TOPLEFT', ItemsTitle, 'BOTTOMLEFT', 0, -8)
+ItemsSubText:SetPoint('RIGHT', -32, 0)
+ItemsSubText:SetText('This Page allows you to setup trackable items.')
+
+local InputBox = CreateFrame('editbox', nil, addon.MAMO_ITEMS, 'InputBoxTemplate')
+InputBox:SetPoint('TOPLEFT', ItemsSubText, 'BOTTOMLEFT', 0, -5)
+InputBox:SetPoint('RIGHT', addon.MAMO_ITEMS, 'RIGHT', -10, 0)
+InputBox:SetHeight(20)
+InputBox:SetNumeric(true)
+InputBox:SetAutoFocus(false)
+InputBox:ClearFocus()
+InputBox:SetScript('OnEnter', function(self)
+	GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+	GameTooltip:AddLine("Instructions:", nil, nil, nil, false)
+	GameTooltip:AddLine("1. Write itemID into the box (i.e. a number)", 0.2, 1, 0.6, 0.2, 1, 0.6)
+	GameTooltip:AddLine("2. Save on enter, discard on escape or losing focus. Adding a same ID will remove the ID", 0.2, 1, 0.6, 0.2, 1, 0.6)
+	GameTooltip:Show()
+end)
+InputBox:SetScript('OnEscapePressed', function(self)
+	self:SetAutoFocus(false) -- Allow focus to clear when escape is pressed
+	self:ClearFocus()
+end)
+InputBox:SetScript('OnEnterPressed', function(self)
+	if self:GetNumber() == 0 then 
+		options.currencies[self.cvar] = nil
+		self:ClearFocus()
+	else
+		local item = nil
+		itemID = self:GetNumber()
+		itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount = GetItemInfo(itemID)
+		if itemName then
+			print('itemfound')
+			item =  {
+				["ID"] = itemID,
+				["label"] = itemName,
+				["Link"] = itemLink,
+				["Rarity"] = itemRarity,
+				["Level"] = itemLevel,
+				["MinLevel"] = itemMinLevel,
+				["Type"] = itemType,
+				["SubType"] = itemSubType,
+				["Order"] = math.huge,
+				["StackCount"] = itemStackCount
+			}
+			OptionStoreItem(item)
+		end
+	end
+	self:SetAutoFocus(false) -- Clear focus when enter is pressed because ketho said so
+	self:ClearFocus()
+end)
+InputBox:SetScript('OnEditFocusGained', function(self)
+	self:SetAutoFocus(true)
+	self:HighlightText()
+end)
+
+InterfaceOptions_AddCategory(addon.MAMO_ITEMS, addonName)
+
+
+
+function RefreshItemList(item)
+	wipe(ItemsVarTable)
+	local options = MethodAltManagerDB.options
+	if(options and options.items) then
+		for cid, cobj in pairs(MethodAltManagerDB.options.items) do  
+			tinsert(ItemsVarTable, {cid, cid, cobj.Link, cobj.Order or math.huge})
+		end
+	end
+end
+
+function addon:MAMO_ITEMS_INIT()
+    local options = MethodAltManagerDB.options
+    RefreshItemList()
+	ItemListFrame:SetItems(ItemsVarTable)
+	ItemListFrame:SortBy(5)
+	--FilterCurrencyList() -- Maybe in the future
+
+	-- We don't really want the user to be able to do anything else while the input box is open
+	-- I'd rather make this a child of the input box, but I can't get it to show up above its child
+	-- todo: show default value around the input box somewhere while it's active
+	local ItemInputBoxMouseBlocker = CreateFrame('frame', nil, ItemListFrame)
+	ItemInputBoxMouseBlocker:SetFrameStrata('FULLSCREEN_DIALOG')
+	ItemInputBoxMouseBlocker:Hide()
+
+	local ItemInputBox = CreateFrame('editbox', nil, ItemInputBoxMouseBlocker, 'InputBoxTemplate')
+	-- block clicking and cancel on any clicks outside the edit box
+	ItemInputBoxMouseBlocker:EnableMouse(true)
+	ItemInputBoxMouseBlocker:SetScript('OnMouseDown', function(self) ItemInputBox:ClearFocus() end)
+	-- block scrolling
+	ItemInputBoxMouseBlocker:EnableMouseWheel(true)
+	ItemInputBoxMouseBlocker:SetScript('OnMouseWheel', function() end)
+	ItemInputBoxMouseBlocker:SetAllPoints(nil)
+
+	local blackout = ItemInputBoxMouseBlocker:CreateTexture(nil, 'BACKGROUND')
+	blackout:SetAllPoints()
+	blackout:SetColorTexture(0,0,0,0.2)
+
+	ItemInputBox:Hide()
+	ItemInputBox:SetSize(100, 20)
+    ItemInputBox:SetJustifyH('RIGHT')
+    ItemInputBox:SetNumeric()
+	ItemInputBox:SetTextInsets(5, 10, 0, 0)
+	ItemInputBox:SetScript('OnEscapePressed', function(self)
+		self:ClearFocus()
+		self:Hide()
+	end)
+
+	ItemInputBox:SetScript('OnEnterPressed', function(self)
+        -- todo: I don't like this, change it
+		if self:GetNumber() == 0 then 
+			options.items[self.cvar].Order = math.huge
+			self:ClearFocus()
+		else
+			options.items[self.cvar].Order = self:GetNumber()
+		end
+		addon:StoreOptions(options)
+		options = MethodAltManagerDB.options
+		
+		self:Hide()
+		RefreshItemList()
+		ItemListFrame:SetItems(ItemsVarTable)
+		ItemListFrame:SortBy(3)
+		ItemListFrame:SortBy(3)
+	end)
+	ItemInputBox:SetScript('OnShow', function(self)
+		self:SetFocus()
+	end)
+	ItemInputBox:SetScript('OnHide', function(self)
+		ItemInputBoxMouseBlocker:Hide()
+		if self.str then
+			self.str:Show()
+		end
+	end)
+	ItemInputBox:SetScript('OnEditFocusLost', function(self)
+		self:Hide()
+		-- FilterBox:SetFocus()
+	end)
+
+
+	local LastClickTime = 0 -- Track double clicks on rows
+	ItemListFrame:SetScripts({
+		OnEnter = function(self)
+			if self.value ~= '' then
+				 GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+				local ItemTable = MethodAltManagerDB.options.items[self.value]
+				GameTooltip:AddLine("ItemID: " ..tostring(self.value), nil, nil, nil, false)
+ 				if ItemTable['Name'] then
+					GameTooltip:AddLine(ItemTable['Name'], 1, 1, 1, true)
+				end 
+				GameTooltip:AddLine("1. Double click to assign the order within AltManager Screen", 0.2, 1, 0.6, 0.2, 1, 0.6)
+				GameTooltip:AddLine("2. Save on enter, discard on escape or losing focus. Saving Empty will remove order, but keep storage", 0.2, 1, 0.6, 0.2, 1, 0.6)
+ 	 			GameTooltip:Show()
+			end
+			self.bg:Show()
+		end,
+		OnLeave = function(self)
+			GameTooltip:Hide()
+			self.bg:Hide()
+		end,
+		OnMouseDown = function(self)
+			local now = GetTime()
+			if now - LastClickTime <= 0.2 then
+				if ItemInputBox.str then
+					ItemInputBox.str:Show()
+				end
+				self.cols[#self.cols]:Hide()
+                ItemInputBox.str = self.cols[#self.cols]
+				ItemInputBox.cvar = self.value
+				ItemInputBox.row = self
+				ItemInputBox:SetPoint('RIGHT', self)
+				local value = options.items[self.value]['Order']
+				ItemInputBox:SetText(value or '')
+				ItemInputBox:HighlightText()
+				ItemInputBoxMouseBlocker:Show()
+				ItemInputBox:Show()
+				ItemInputBox:SetFocus()
 			else
 				LastClickTime = now
 			end
