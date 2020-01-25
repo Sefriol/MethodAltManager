@@ -313,7 +313,6 @@ function filterItems(items)
 	if (items) then
 		for cid, cobj in pairs(items) do
 			if(cobj.order and not (cobj.order == math.huge)) then
-				print('test')
 				FilteredList[cid] = cobj
 			end
 		end
@@ -438,6 +437,7 @@ function AltManager:StoreData(data)
 	db.data = db.data or {}
 	db.options = db.options or {}
 	db.options.currencies = db.options.currencies or {}
+	db.options.items = db.options.items or {}
 	local update = false
 	for k, v in pairs(db.data) do
 		if k == guid then

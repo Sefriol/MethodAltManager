@@ -467,8 +467,11 @@ function addon:MAMO_CURR_INIT()
 				CurrencyInputBox.cvar = self.value
 				CurrencyInputBox.row = self
 				CurrencyInputBox:SetPoint('RIGHT', self)
-				local value = options.currencies[self.value]['order']
-				CurrencyInputBox:SetText(value or '')
+				local value = ''
+				if options.currencies[self.value] and options.currencies[self.value]['order'] then
+					value = options.currencies[self.value]
+				end
+				CurrencyInputBox:SetText(value)
 				CurrencyInputBox:HighlightText()
 				CurrencyInputBoxMouseBlocker:Show()
 				CurrencyInputBox:Show()
