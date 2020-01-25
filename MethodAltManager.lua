@@ -7,6 +7,7 @@ _G["AltManager"] = AltManager
 
 local sizey = 220
 local instances_y_add = 1
+local items_y_add = 1
 local currencies_y_add = 1
 local xoffset = 0
 local yoffset = 150
@@ -217,18 +218,17 @@ function AltManager:OnLoad()
 	end
 end
 
-function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offset, label, justify)
+function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offset, label, justify, x_offset)
 	local f = CreateFrame("Button", nil, parent)
 	f:SetSize(x_size, height)
 	f:SetNormalFontObject(GameFontHighlightSmall)
 	f:SetText(label)
-	f:SetPoint("TOPLEFT", relative_to, "TOPLEFT", 0, y_offset)
+	f:SetPoint("TOPLEFT", relative_to, "TOPLEFT", x_offset or 0, y_offset)
 	f:GetFontString():SetJustifyH(justify)
 	f:GetFontString():SetJustifyV("CENTER")
 	f:SetPushedTextOffset(0, 0)
 	f:GetFontString():SetWidth(120)
 	f:GetFontString():SetHeight(20)
-	
 	return f
 end
 
@@ -306,6 +306,31 @@ function filterCurrencies(curr)
 	end
 
 	return FilteredList
+end
+
+function filterItems(items)
+	local FilteredList = {}
+	if (items) then
+		for cid, cobj in pairs(items) do
+			if(cobj.order and not (cobj.order == math.huge)) then
+				print('test')
+				FilteredList[cid] = cobj
+			end
+		end
+	end
+	return FilteredList
+end
+
+function CopyItemTable(items)
+	local List = {}
+	if (items) then
+		for cid, cobj in pairs(items) do
+			List[cid] = {
+				["label"] = cobj.label
+			}
+		end
+	end
+	return List
 end
 
 function AltManager:GenerateRaidData()
@@ -445,11 +470,13 @@ function AltManager:StoreOptions(data)
 	db.options.currencies = db.options.currencies or {}
 
 	db.options.currencies = curr
+	self:DynamicUIReload()
+end
+
+function AltManager:DynamicUIReload()
 	self.main_frame:Hide()
-	self:CreateCurrencyFrame(db.options.currencies)
-	self.unroll_button:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPLEFT", 4 + per_alt_x, -sizey - (currencies_y_add*20) +40)
-	self.main_frame:SetSize(max((MethodAltManagerDB.alts + 1) * per_alt_x, min_x_size), sizey + (currencies_y_add*20) )
-	self.main_frame.background:SetAllPoints()
+	self:StoreData(self:CollectData())
+	self:CreateLabels()
 	self.main_frame:Show()
 end
 
@@ -466,6 +493,7 @@ function AltManager:CollectData()
 	local seals_bought = nil
 	local highest_mplus = 0
 	local depleted = false
+	local items = nil
 
 	local guid = UnitGUID('player')
 
@@ -476,6 +504,9 @@ function AltManager:CollectData()
 	end
 	if MethodAltManagerDB and MethodAltManagerDB.options then
 		options = MethodAltManagerDB.options
+		if options.items then
+			items = CopyItemTable(options.items)
+		end
 	end 
 
 	C_MythicPlus.RequestRewards()
@@ -489,7 +520,7 @@ function AltManager:CollectData()
 	for container=BACKPACK_CONTAINER, NUM_BAG_SLOTS do
 		local slots = GetContainerNumSlots(container)
 		for slot=1, slots do
-			local _, _, _, _, _, _, slotLink, _, _, slotItemID = GetContainerItemInfo(container, slot)
+			local _, itemCount, _, _, _, _, slotLink, _, _, slotItemID = GetContainerItemInfo(container, slot)
 			if slotItemID == 158923 then
 				local itemString = slotLink:match("|Hkeystone:([0-9:]+)|h(%b[])|h")
 				local info = { strsplit(":", itemString) }
@@ -510,6 +541,9 @@ function AltManager:CollectData()
 				if not level then print("MethodAltManager - Parse Failure, please let Qoning know that this happened.") end
 				expire = tonumber(info[4])
 				keystone_found = true
+			elseif items and items[slotItemID] then
+				items[slotItemID].count = items[slotItemID].count or 0
+				items[slotItemID].count = items[slotItemID].count + itemCount
 			end
 		end
 	end
@@ -606,7 +640,7 @@ function AltManager:CollectData()
 	char_table.level = level
 	char_table.heart_of_azeroth = heart_of_azeroth
 	char_table.highest_mplus = highest_mplus
-
+	char_table.items = items
 	char_table.currencies = self.CurrencyTable
 	char_table.is_depleted = depleted
 	char_table.expires = self:GetNextWeeklyResetTime()
@@ -647,7 +681,7 @@ function AltManager:PopulateStrings()
 					anchor_frame,
 					-(i - 1) * font_height,
 					column.data(alt_data, i),
-					"CENTER")
+					"CENTER", -3)
 				-- insert it into storage if just created
 				if not self.main_frame.alt_columns[alt].label_columns[i] then
 					self.main_frame.alt_columns[alt].label_columns[i] = current_row
@@ -694,9 +728,9 @@ function AltManager:CreateMenu()
 	self.main_frame.settingsButton:ClearAllPoints()
 	self.main_frame.settingsButton:SetFrameLevel(self.main_frame:GetFrameLevel() + 2)
 	self.main_frame.settingsButton:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPRIGHT",Aurora and -50 or -50, Aurora and 5 or -2)
-	self.main_frame.settingsButton:SetScript("OnClick", function() InterfaceOptionsFrame_OpenToCategory(AltManager.MAMO) end)
+	self.main_frame.settingsButton:SetScript("OnClick", function() InterfaceOptionsFrame_OpenToCategory(AltManager.MAMO_CURR) end)
 
-	local currencies = (MethodAltManagerDB.options and MethodAltManagerDB.options.currencies) or nil
+
 	local column_table = {
 		name = {
 			order = 1,
@@ -746,8 +780,16 @@ function AltManager:CreateMenu()
 			label = seals_bought_label,
 			data = function(alt_data) return tostring(alt_data.seals_bought) end,
 		},
+		items = {
+			order = 9,
+			data = "items",
+			items_function = function()
+				self.item_list = self.item_list or {}
+				self:CreateItemFrame()
+			end,
+		},
 		currencies = {
-			order = 8,
+			order = 9,
 			data = "currencies",
 			currency_function = function(currencies)
 				self.currency_list = self.currency_list or {}
@@ -771,7 +813,7 @@ function AltManager:CreateMenu()
 					self.instances_unroll.state = "open"
 				else
 					-- do rollup
-					self.main_frame:SetSize(max((MethodAltManagerDB.alts + 1) * per_alt_x, min_x_size), sizey + (currencies_y_add*20) )
+					self.main_frame:SetSize(max((MethodAltManagerDB.alts + 1) * per_alt_x, min_x_size), (-1*self.main_frame.currency_start) + (currencies_y_add*20) + 40)
 					self.main_frame.background:SetAllPoints()
 					self.instances_unroll.unroll_frame:Hide()
 					button:SetText("+  Instances")
@@ -781,8 +823,14 @@ function AltManager:CreateMenu()
 		}
 	}
 	self.columns_table = column_table
-	self.main_frame.currency_start = self.main_frame.lowest_point
+	self:CreateLabels(true)
+end
+
+function AltManager:CreateLabels(first_render)
 	-- create labels and unrolls
+	local currencies = (MethodAltManagerDB.options and MethodAltManagerDB.options.currencies) or nil
+	local items = (MethodAltManagerDB.options and MethodAltManagerDB.options.items) or nil
+	items = filterItems(items)
 	local font_height = 20
 	local label_column = self.main_frame.label_column or CreateFrame("Button", nil, self.main_frame)
 	if not self.main_frame.label_column then self.main_frame.label_column = label_column end
@@ -791,29 +839,34 @@ function AltManager:CreateMenu()
 	local i = 1
 	for row_iden, row in spairs(self.columns_table, function(t, a, b) return t[a].order < t[b].order end) do
 		if row.label then
-			local label_row = self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, row.label..":", "RIGHT")
+			
+			if first_render then 
+				local label_row = self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, row.label..":", "RIGHT")
+			end
 			self.main_frame.lowest_point = -(i-1)*font_height
 		end
 		if row.data == "unroll" then
+			self.main_frame.unroll_start = self.main_frame.lowest_point
 			-- create a button that will unroll it
-			self.unroll_button = CreateFrame("Button", nil, self.main_frame, "UIPanelButtonTemplate")
+			self.unroll_button = self.unroll_button or CreateFrame("Button", nil, self.main_frame, "UIPanelButtonTemplate")
 			local unroll_button = self.unroll_button
 			unroll_button:SetText(row.name)
 			unroll_button:SetFrameLevel(self.main_frame:GetFrameLevel() + 2)
 			unroll_button:SetSize(unroll_button:GetTextWidth() + 20, 25)
-			unroll_button:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPLEFT", 4 + per_alt_x, -(i-1)*font_height-10)
+			unroll_button:SetPoint("BOTTOMRIGHT", self.main_frame, "TOPLEFT", 4 + per_alt_x, -(i-1)*font_height)
 			
 			if Aurora then Aurora.Skin.UIPanelButtonTemplate(unroll_button) end
 			unroll_button:SetScript("OnClick", function() row.unroll_function(unroll_button) end)
 
-			local tierDropDown = CreateFrame("Frame", nil, self.currency_list.frame, "UIDropDownMenuTemplate")
+			self.tierDropDown = self.tierDropDown or CreateFrame("Frame", nil, self.currency_list.frame, "UIDropDownMenuTemplate")
+			local tierDropDown = self.tierDropDown
 			if Aurora then Aurora.Skin.UIDropDownMenuTemplate(tierDropDown) end
-			-- obj:SetPoint(point, relativeTo, relativePoint, ofsx, ofsy)
+
 			tierDropDown:SetPoint("LEFT", unroll_button, "RIGHT")
 			UIDropDownMenu_SetWidth(tierDropDown, 130) -- Use in place of dropDown:SetWidth
 			UIDropDownMenu_SetText(tierDropDown, EJ_GetTierInfo(favoriteTier))
 			UIDropDownMenu_Initialize(tierDropDown, AltManagerDropDown_Menu)
-			self.main_frame.lowest_point = -(i-1)*font_height-10
+			self.main_frame.lowest_point = -(i-1)*font_height
 
 			function tierDropDown:SetTier(newValue)
 				-- Change Encounter Journal to correct expansion
@@ -831,35 +884,156 @@ function AltManager:CreateMenu()
 				row.unroll_function(unroll_button)
 			end
 		end
+		if row.data == "items" then
+			if items then
+				self.main_frame.items_start = self.main_frame.lowest_point
+				row.items_function()
+			end
+			i = i + tablelength(items)
+			self.main_frame.lowest_point= -(i-1)*font_height-10
+		end
 		if row.data == "currencies" then
 			if currencies then
 				self.main_frame.currency_start = self.main_frame.lowest_point
 				row.currency_function(currencies)
 			end
-			i = i + tablelength(currencies) 
+			i = i + tablelength(currencies)
+			self.main_frame.lowest_point= -(i-1)*font_height-10
 		end
 		i = i + 1
 	end
 	sizey = i * 20
-	label_column:SetSize(per_alt_x, sizey)
+	label_column:SetSize(per_alt_x, (-1*self.main_frame.lowest_point))
+end
+
+function AltManager:CreateItemFrame()
+	local item_rows = nil
+	local db = MethodAltManagerDB
+	if (db.options and db.options.items) then
+		item_rows = filterItems(db.options.items)
+	end
+	-- do unroll
+	self.item_list.frame = self.item_list.frame or CreateFrame("Button", nil, self.main_frame)
+	self.item_list.frame:SetSize(per_alt_x, items_y_add*20)
+	self.item_list.frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.items_start-20)
+	self.item_list.frame:Show()
+	
+	local font_height = 20
+	-- create the rows for the unroll
+	
+
+	if not self.item_list.labels or tablelength(self.item_list.labels) == 0 then
+		self.item_list.labels = {}
+		local i = 1
+		for row_iden, row in spairs(item_rows, function(t, a, b) return t[a].order < t[b].order end) do
+			if row.label then
+
+				local label_row = self:CreateFontFrame(self.item_list.frame, per_alt_x, font_height, self.item_list.frame, -(i-1)*font_height, row.label..':', "RIGHT")
+				table.insert(self.item_list.labels, label_row)
+			end
+			i = i + 1
+		end
+		items_y_add = i
+	elseif not item_rows or tablelength(item_rows) == 0 then
+		print('test2')
+		local idx, v = next(self.item_list.labels,idx)
+		if(v) then
+			v:Hide()
+		end
+		while idx do
+			idx, v = next(self.item_list.labels,idx)
+			if(v) then
+				v:Hide()
+			end
+		end
+	else
+		local i = 1
+		local idx, v = nil,nil
+		for row_iden, row in spairs(item_rows, function(t, a, b) return t[a].order < t[b].order end) do
+			if row.label then
+				local tempIdx = idx
+				idx, v = next(self.item_list.labels,idx)
+				if not (idx) then
+					local label_row = self:CreateFontFrame(self.item_list.frame, per_alt_x, font_height, self.item_list.frame, -(i-1)*font_height, row.label, "RIGHT")
+					table.insert(self.item_list.labels, label_row)
+					idx = tempIdx + 1 
+				else
+					v:SetText(row.label)
+					v:Show()
+				end
+			end
+			i = i + 1
+		end
+		while idx do
+			idx, v = next(self.item_list.labels,idx)
+			if(v) then
+				v:Hide()
+			end
+		end
+		items_y_add = i
+	end
+	
+	-- populate it for alts
+	self.item_list.alt_columns = self.item_list.alt_columns or {}
+	local alt = 0
+	for alt_guid, alt_data in spairs(db.data, function(t, a, b) return t[a].ilevel > t[b].ilevel end) do
+		alt = alt + 1
+		-- create the frame to which all the fontstrings anchor
+		local anchor_frame = self.item_list.alt_columns[alt] or CreateFrame("Button", nil, self.item_list.frame)
+		if not self.item_list.alt_columns[alt] then
+			self.item_list.alt_columns[alt] = anchor_frame
+		end
+		anchor_frame:SetPoint("TOPLEFT", self.item_list.frame, "TOPLEFT", per_alt_x * alt, -1)
+		anchor_frame:SetSize(per_alt_x, items_y_add*20)
+		-- init table for fontstring storage
+		self.item_list.alt_columns[alt].label_columns = self.item_list.alt_columns[alt].label_columns or {}
+		local label_columns = self.item_list.alt_columns[alt].label_columns
+		-- create / fill fontstrings
+		local i = 1
+		for column_iden, column in spairs(item_rows, function(t, a, b) return t[a].order < t[b].order end) do
+			local current_row = 
+				label_columns[i] or self:CreateFontFrame(
+					self.item_list.frame,
+					per_alt_x,
+					column.font_height or font_height,
+					anchor_frame, -(i - 1) * font_height,
+					(alt_data.items and alt_data.items[column_iden] and alt_data.items[column_iden].count) or '-',
+					"CENTER", -7)
+			-- insert it into storage if just created
+			if not self.item_list.alt_columns[alt].label_columns[i] then
+				self.item_list.alt_columns[alt].label_columns[i] = current_row
+			end
+			current_row:SetText((alt_data.items and alt_data.items[column_iden] and alt_data.items[column_iden].count) or '-')
+			current_row:Show()
+			i = i + 1
+		end
+		i = i-1
+		for idx, col  in pairs(self.item_list.alt_columns[alt].label_columns) do
+			if (idx > i) then
+				col:Hide()
+			end
+		end
+	end
+
+	-- fixup the background
+	--self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey + (items_y_add*20) + (instances_y_add*20))
+	--self.main_frame.background:SetAllPoints()
 end
 
 function AltManager:CreateCurrencyFrame(currencies)
 	local list_size = tablelength(currencies)
 	self.currency_list.frame = self.currency_list.frame or CreateFrame("Button", nil, self.main_frame)
 	self.currency_list.frame:SetSize(per_alt_x, currencies_y_add*20)
-	self.currency_list.frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.currency_start-20)
+	self.currency_list.frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.currency_start+10)
 	self.currency_list.frame:Show()
 	local font_height = 20
 	if not self.currency_list.labels or tablelength(self.currency_list.labels) == 0 then
-		print('test')
 		self.currency_list.labels = {}
 		local i = 1
 		for cur_iden, cur in spairs(currencies, function(t, a, b) return t[a].order < t[b].order end) do
 			if cur.label then
 				local label_row = self:CreateFontFrame(self.currency_list.frame, per_alt_x, font_height, self.currency_list.frame, -(i-1)*font_height, cur.label..":", "RIGHT")
 				table.insert(self.currency_list.labels, label_row)
-				self.main_frame.lowest_point = -(i-1)*font_height
 			end
 			i = i + 1
 		end
@@ -932,7 +1106,7 @@ function AltManager:CreateCurrencyFrame(currencies)
 					anchor_frame,
 					-(i - 1) * font_height,
 					tostring(cur.count),
-					"CENTER")
+					"CENTER", -7)
 				-- insert it into storage if just created
 				if not self.currency_list.alt_columns[alt].label_columns[i] then
 					self.currency_list.alt_columns[alt].label_columns[i] = current_row
@@ -963,7 +1137,7 @@ function AltManager:CreateCurrencyFrame(currencies)
 		end
 	end
 	-- fixup the background
-	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey )
+	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), (-1*self.main_frame.currency_start) + (currencies_y_add*20) + 40)
 	self.main_frame.background:SetAllPoints()
 end
 
@@ -978,7 +1152,7 @@ function AltManager:CreateUnrollFrame()
 	-- do unroll
 	self.instances_unroll.unroll_frame = self.instances_unroll.unroll_frame or CreateFrame("Button", nil, self.main_frame)
 	self.instances_unroll.unroll_frame:SetSize(per_alt_x, instances_y_add*20)
-	self.instances_unroll.unroll_frame:SetPoint("TOPLEFT", self.currency_list.frame, "TOPLEFT", 4, -currencies_y_add*20-40)
+	self.instances_unroll.unroll_frame:SetPoint("TOPLEFT", self.main_frame, "TOPLEFT", 4, self.main_frame.unroll_start - 35 - 10)
 	self.instances_unroll.unroll_frame:Show()
 	
 	local font_height = 20
@@ -1047,7 +1221,7 @@ function AltManager:CreateUnrollFrame()
 					column.font_height or font_height,
 					anchor_frame, -(i - 1) * font_height,
 					column.data(alt_data,i),
-					"CENTER")
+					"CENTER",-7)
 			-- insert it into storage if just created
 			if not self.instances_unroll.alt_columns[alt].label_columns[i] then
 				self.instances_unroll.alt_columns[alt].label_columns[i] = current_row
@@ -1065,7 +1239,7 @@ function AltManager:CreateUnrollFrame()
 	end
 
 	-- fixup the background
-	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), sizey + (currencies_y_add*20) + (instances_y_add*20))
+	self.main_frame:SetSize(max((alt + 1) * per_alt_x, min_x_size), (-1*self.main_frame.lowest_point) + (instances_y_add*20))
 	self.main_frame.background:SetAllPoints()
 end
 

@@ -90,7 +90,6 @@ local function setscrolllist(scroll, items)
 	scroll.maxValue = max(scroll.itemcount - scroll.slots, 0)
 	--scroll.value = scroll.minValue
 	scroll.value = scroll.value <= scroll.maxValue and scroll.value or scroll.maxValue
-    print(scroll.itemcount)
 	scroll.scrollbar:SetMinMaxValues(0, scroll.maxValue)
 	scroll.scrollbar:SetValue(scroll.value)
 	scroll.scrollbar:SetValueStep(scroll.stepValue)
@@ -468,7 +467,7 @@ function addon:MAMO_CURR_INIT()
 				CurrencyInputBox.cvar = self.value
 				CurrencyInputBox.row = self
 				CurrencyInputBox:SetPoint('RIGHT', self)
-				local value = addon.CurrencyTable[self.value]['order']
+				local value = options.currencies[self.value]['order']
 				CurrencyInputBox:SetText(value or '')
 				CurrencyInputBox:HighlightText()
 				CurrencyInputBoxMouseBlocker:Show()
@@ -524,7 +523,7 @@ ItemsSubText:SetJustifyV('TOP')
 ItemsSubText:SetJustifyH('LEFT')
 ItemsSubText:SetPoint('TOPLEFT', ItemsTitle, 'BOTTOMLEFT', 0, -8)
 ItemsSubText:SetPoint('RIGHT', -32, 0)
-ItemsSubText:SetText('This Page allows you to setup trackable items.')
+ItemsSubText:SetText('This Page allows you to setup trackable items. Currently Addon only scans your inventory')
 
 local InputBox = CreateFrame('editbox', nil, addon.MAMO_ITEMS, 'InputBoxTemplate')
 InputBox:SetPoint('TOPLEFT', ItemsSubText, 'BOTTOMLEFT', 0, -5)
@@ -537,7 +536,7 @@ InputBox:SetScript('OnEnter', function(self)
 	GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
 	GameTooltip:AddLine("Instructions:", nil, nil, nil, false)
 	GameTooltip:AddLine("1. Write itemID into the box (i.e. a number)", 0.2, 1, 0.6, 0.2, 1, 0.6)
-	GameTooltip:AddLine("2. Save on enter, discard on escape or losing focus. Adding a same ID will remove the ID", 0.2, 1, 0.6, 0.2, 1, 0.6)
+	GameTooltip:AddLine("2. Save on enter, discard on escape or losing focus. Adding a same ID will remove the item from storage", 0.2, 1, 0.6, 0.2, 1, 0.6)
 	GameTooltip:Show()
 end)
 InputBox:SetScript('OnEscapePressed', function(self)
@@ -553,7 +552,6 @@ InputBox:SetScript('OnEnterPressed', function(self)
 		itemID = self:GetNumber()
 		itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount = GetItemInfo(itemID)
 		if itemName then
-			print('itemfound')
 			item =  {
 				["ID"] = itemID,
 				["label"] = itemName,
@@ -563,7 +561,7 @@ InputBox:SetScript('OnEnterPressed', function(self)
 				["MinLevel"] = itemMinLevel,
 				["Type"] = itemType,
 				["SubType"] = itemSubType,
-				["Order"] = math.huge,
+				["order"] = math.huge,
 				["StackCount"] = itemStackCount
 			}
 			OptionStoreItem(item)
@@ -586,7 +584,7 @@ function RefreshItemList(item)
 	local options = MethodAltManagerDB.options
 	if(options and options.items) then
 		for cid, cobj in pairs(MethodAltManagerDB.options.items) do  
-			tinsert(ItemsVarTable, {cid, cid, cobj.Link, cobj.Order or math.huge})
+			tinsert(ItemsVarTable, {cid, cid, cobj.Link, cobj.order or math.huge})
 		end
 	end
 end
@@ -631,10 +629,10 @@ function addon:MAMO_ITEMS_INIT()
 	ItemInputBox:SetScript('OnEnterPressed', function(self)
         -- todo: I don't like this, change it
 		if self:GetNumber() == 0 then 
-			options.items[self.cvar].Order = math.huge
+			options.items[self.cvar].order = math.huge
 			self:ClearFocus()
 		else
-			options.items[self.cvar].Order = self:GetNumber()
+			options.items[self.cvar].order = self:GetNumber()
 		end
 		addon:StoreOptions(options)
 		options = MethodAltManagerDB.options
@@ -644,6 +642,7 @@ function addon:MAMO_ITEMS_INIT()
 		ItemListFrame:SetItems(ItemsVarTable)
 		ItemListFrame:SortBy(3)
 		ItemListFrame:SortBy(3)
+		addon:DynamicUIReload()
 	end)
 	ItemInputBox:SetScript('OnShow', function(self)
 		self:SetFocus()
@@ -691,7 +690,7 @@ function addon:MAMO_ITEMS_INIT()
 				ItemInputBox.cvar = self.value
 				ItemInputBox.row = self
 				ItemInputBox:SetPoint('RIGHT', self)
-				local value = options.items[self.value]['Order']
+				local value = options.items[self.value]['order']
 				ItemInputBox:SetText(value or '')
 				ItemInputBox:HighlightText()
 				ItemInputBoxMouseBlocker:Show()
