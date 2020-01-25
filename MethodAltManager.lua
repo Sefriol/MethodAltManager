@@ -907,7 +907,7 @@ function AltManager:CreateLabels(first_render)
 end
 
 function AltManager:CreateItemFrame()
-	local item_rows = nil
+	local item_rows = {}
 	local db = MethodAltManagerDB
 	if (db.options and db.options.items) then
 		item_rows = filterItems(db.options.items)
@@ -935,7 +935,6 @@ function AltManager:CreateItemFrame()
 		end
 		items_y_add = i
 	elseif not item_rows or tablelength(item_rows) == 0 then
-		print('test2')
 		local idx, v = next(self.item_list.labels,idx)
 		if(v) then
 			v:Hide()
