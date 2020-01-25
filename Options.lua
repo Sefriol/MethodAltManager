@@ -469,7 +469,7 @@ function addon:MAMO_CURR_INIT()
 				CurrencyInputBox:SetPoint('RIGHT', self)
 				local value = ''
 				if options.currencies[self.value] and options.currencies[self.value]['order'] then
-					value = options.currencies[self.value]
+					value = options.currencies[self.value]['order']
 				end
 				CurrencyInputBox:SetText(value)
 				CurrencyInputBox:HighlightText()
