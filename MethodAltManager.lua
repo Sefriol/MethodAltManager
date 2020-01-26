@@ -166,7 +166,7 @@ do
 			local data = AltManager:CollectData()
 			AltManager:StoreData(data)
 		end
-		if (event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE") and AltManager.addon_loaded then
+		if (event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE") and (AltManager.addon_loaded and AltManager.player_ready) then
 			local data = AltManager:CollectData()
 			AltManager:StoreData(data)
 		end
@@ -199,6 +199,7 @@ function AltManager:OnLogin()
 	
 	AltManager:MakeTopBottomTextures(self.main_frame)
 	AltManager:MakeBorder(self.main_frame, 5)
+	self.player_ready = true
 end
 
 function AltManager:OnLoad()
@@ -207,7 +208,6 @@ function AltManager:OnLoad()
 
 	MethodAltManagerDB = MethodAltManagerDB or self:InitDB()
 
-	self.addon_loaded = true
 
 	C_MythicPlus.RequestRewards()
 	C_MythicPlus.RequestCurrentAffixes()
@@ -216,6 +216,7 @@ function AltManager:OnLoad()
 		-- request info in advance
 		C_MythicPlus.RequestMapInfo(k)
 	end
+	self.addon_loaded = true
 end
 
 function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offset, label, justify, tooltip)
