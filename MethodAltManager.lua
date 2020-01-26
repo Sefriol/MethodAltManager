@@ -187,6 +187,7 @@ end
 function AltManager:OnLogin()
 	self:GenerateDungeonTable()
 	self.CurrencyTable = self.CurrencyTable or self:GenerateCurrencyTable()
+	self:ValidateSchema()
 	self:ValidateReset()
 	self:StoreData(self:CollectData())
 	
@@ -379,6 +380,34 @@ function AltManager:GenerateRaidData()
 	raids[favoriteTier] = raidData
 end
 
+function AltManager:ValidateSchema()
+	local db = MethodAltManagerDB
+	if not db then return end
+	if not db.data then return end
+	local keyset = {}
+	for k in pairs(db.data) do
+		table.insert(keyset, k)
+	end
+	for alt = 1, db.alts do
+		local schema_version = db.data[keyset[alt]].version
+		local char_table = db.data[keyset[alt]]
+		if not schema_version then
+			print('MethodAltManager - Old Character Schema found for '..char_table.name..'. Updating')
+			char_table.mplus = {
+				key = {
+					["dungeon"] = char_table.dungeon,
+					["level"] = char_table.level
+				},
+				highest_mplus = char_table.highest_mplus
+			}
+			char_table.dungeon = nil
+			char_table.level = nil
+			char_table.highest_mplus = nil
+			char_table.version = VERSION
+		end
+	end
+end
+
 function AltManager:ValidateReset()
 	local db = MethodAltManagerDB
 	if not db then return end
@@ -395,10 +424,15 @@ function AltManager:ValidateReset()
 		if time() > expiry then
 			-- reset this alt
 			char_table.seals_bought = 0
-			char_table.dungeon = "Unknown"
-			char_table.level = "?"
-			char_table.highest_mplus = 0
-			char_table.is_depleted = false
+			local reward = char_table.mplus.highest_mplus > 0
+			char_table.mplus = {
+				key = {
+					["dungeon"] = "Unknown",
+					["level"] = "?"
+				},
+				highest_mplus = 0,
+				reward = reward
+			}
 			char_table.expires = self:GetNextWeeklyResetTime()
 			char_table.savedins = {}
 			if not char_table.heart_of_azeroth then else
@@ -506,6 +540,7 @@ function AltManager:CollectData()
 	local level = nil
 	local seals = nil
 	local seals_bought = nil
+ 	local mplus = { key = { } }
 	local highest_mplus = 0
 	local depleted = false
 	local items = nil
@@ -530,13 +565,18 @@ function AltManager:CollectData()
 		highest_mplus = l
 	end
 	
+	local challengeMapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
+	local reward = C_MythicPlus.IsWeeklyRewardAvailable()
+	dungeon = challengeMapID and C_ChallengeMode.GetMapUIInfo(challengeMapID) or "Unknown"
+	level = C_MythicPlus.GetOwnedKeystoneLevel() or '?'
+	
 	-- find keystone
 	local keystone_found = false
 	for container=BACKPACK_CONTAINER, NUM_BAG_SLOTS do
 		local slots = GetContainerNumSlots(container)
 		for slot=1, slots do
 			local _, itemCount, _, _, _, _, slotLink, _, _, slotItemID = GetContainerItemInfo(container, slot)
-			if slotItemID == 158923 then
+			--[[ if slotItemID == 158923 then
 				local itemString = slotLink:match("|Hkeystone:([0-9:]+)|h(%b[])|h")
 				local info = { strsplit(":", itemString) }
 				-- scan tooltip for depleted
@@ -556,15 +596,12 @@ function AltManager:CollectData()
 				if not level then print("MethodAltManager - Parse Failure, please let Qoning know that this happened.") end
 				expire = tonumber(info[4])
 				keystone_found = true
-			elseif items and items[slotItemID] then
+			else ]]
+			if items and items[slotItemID] then
 				items[slotItemID].count = items[slotItemID].count or 0
 				items[slotItemID].count = items[slotItemID].count + itemCount
 			end
 		end
-	end
-	if not keystone_found then
-		dungeon = "Unknown"
-		level = "?"
 	end
 	
 	-- Heart of Azeroth Progress
@@ -652,15 +689,19 @@ function AltManager:CollectData()
 	char_table.ilevel = ilevel
 	char_table.seals = seals
 	char_table.seals_bought = seals_bought
-
-	char_table.dungeon = dungeon
-	char_table.level = level
+	char_table.mplus = {
+		key = {
+			dungeon = dungeon,
+			level = level
+		},
+		reward = reward,
+		highest_mplus = highest_mplus
+	}
 	char_table.heart_of_azeroth = heart_of_azeroth
-	char_table.highest_mplus = highest_mplus
 	char_table.items = items
 	char_table.currencies = self.CurrencyTable
-	char_table.is_depleted = depleted
 	char_table.expires = self:GetNextWeeklyResetTime()
+	char_table.version = VERSION
 	return char_table
 end
 
@@ -802,12 +843,22 @@ function AltManager:CreateMenu()
 		mplus = {
 			order = 4,
 			label = mythic_done_label,
-			data = function(alt_data) return tostring(alt_data.highest_mplus) end, 
+			data = function(alt_data) return tostring(alt_data.mplus.highest_mplus) end,
+			color = function(alt_data) return alt_data.mplus.reward and {r=230, g=128, b=0} or {r=255, g=255, b=255} end, 
+			tooltip = function(alt_data)
+				return function(self)
+					if AltManager:ShowTooltip() then
+						GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+						if alt_data.mplus.reward then GameTooltip:AddLine('Weekly Chest available', 0.2, 1, 0.6, 0.2, 1, 0.6) end
+						GameTooltip:Show()
+					end
+				end
+			end,
 		},
 		keystone = {
 			order = 5,
 			label = mythic_keystone_label,
-			data = function(alt_data) local depleted_string = alt_data.is_depleted and " (D)" or ""; return (dungeons[alt_data.dungeon] or alt_data.dungeon) .. " +" .. tostring(alt_data.level) .. depleted_string; end,
+			data = function(alt_data) return (dungeons[alt_data.mplus.key.dungeon] or alt_data.mplus.key.dungeon) .. " +" .. tostring(alt_data.mplus.key.level); end,
 		},
 		seals_owned = {
 			order = 6,
