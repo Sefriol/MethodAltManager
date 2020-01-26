@@ -553,20 +553,10 @@ InputBox:SetScript('OnEnterPressed', function(self)
 	else
 		local item = nil
 		itemID = self:GetNumber()
-		itemName, itemLink, itemRarity, itemLevel, itemMinLevel, itemType, itemSubType, itemStackCount = GetItemInfo(itemID)
-		if itemName then
-			item =  {
-				["ID"] = itemID,
-				["label"] = itemName,
-				["Link"] = itemLink,
-				["Rarity"] = itemRarity,
-				["Level"] = itemLevel,
-				["MinLevel"] = itemMinLevel,
-				["Type"] = itemType,
-				["SubType"] = itemSubType,
-				["order"] = math.huge,
-				["StackCount"] = itemStackCount
-			}
+		item = {}
+		item.label, item.link, item.rarity, item.level, item.minlevel, item.type, item.subtype, item.stackcount = GetItemInfo(itemID)
+		if item.label then
+			item.ID = itemID
 			OptionStoreItem(item)
 		end
 	end
@@ -587,7 +577,7 @@ function RefreshItemList(item)
 	local options = MethodAltManagerDB.options
 	if(options and options.items) then
 		for cid, cobj in pairs(MethodAltManagerDB.options.items) do  
-			tinsert(ItemsVarTable, {cid, cid, cobj.Link, cobj.order or math.huge})
+			tinsert(ItemsVarTable, {cid, cid, cobj.link, cobj.order or math.huge})
 		end
 	end
 end

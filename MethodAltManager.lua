@@ -28,7 +28,7 @@ local seals_bought_label = "Seals obtained"
 local azerite_label = "Heart of Azeroth"
 local depleted_label = "Depleted"
 
-local VERSION = "2.0.2"
+local VERSION = "@project-version@"
 
 local favoriteTier = EJ_GetNumTiers()
 
@@ -229,6 +229,12 @@ function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offse
 	f:GetFontString():SetWidth(120)
 	f:GetFontString():SetHeight(20)
 	f:SetFrameLevel(parent:GetFrameLevel()+2)
+	if tooltip then
+		f:SetScript('OnEnter', tooltip)
+		f:SetScript('OnLeave', function(self)
+			GameTooltip:Hide()
+		end)
+	end
 	return f
 end
 
@@ -680,7 +686,8 @@ function AltManager:PopulateStrings()
 					anchor_frame,
 					-(i - 1) * font_height,
 					column.data(alt_data, i),
-					"CENTER")
+					"CENTER",
+					column.tooltip and column.tooltip(alt_data,i))
 				-- insert it into storage if just created
 				if not self.main_frame.alt_columns[alt].label_columns[i] then
 					self.main_frame.alt_columns[alt].label_columns[i] = current_row
@@ -733,6 +740,15 @@ function AltManager:CreateMenu()
 			label = name_label,
 			data = function(alt_data) return alt_data.name end,
 			color = function(alt_data) return RAID_CLASS_COLORS[alt_data.class] end,
+			tooltip = function(alt_data)
+				return function(self)
+				GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+				GameTooltip:AddLine("Instructions:", nil, nil, nil, false)
+				GameTooltip:AddLine("1. Write itemID into the box (i.e. a number)", 0.2, 1, 0.6, 0.2, 1, 0.6)
+				GameTooltip:AddLine("2. Save on enter, discard on escape or losing focus. Adding a same ID will remove the item from storage", 0.2, 1, 0.6, 0.2, 1, 0.6)
+				GameTooltip:Show()
+				end
+			end,
 		},
 		ilevel = {
 			order = 2,
@@ -753,6 +769,19 @@ function AltManager:CreateMenu()
 				if not alt_data.heart_of_azeroth then return "-"
 				else
 					return tostring(alt_data.heart_of_azeroth.lvl) .. " (" .. tostring(alt_data.heart_of_azeroth.xp/alt_data.heart_of_azeroth.totalXP*100):gsub('(%-?%d+)%.%d+','%1') .. "%)"
+				end
+			end,
+			tooltip = function(alt_data)
+				return function(self)
+					GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+					if alt_data.heart_of_azeroth then
+					GameTooltip:AddLine('Details:', nil, nil, nil, false)
+					GameTooltip:AddLine('XP: '..alt_data.heart_of_azeroth.xp..'/'..alt_data.heart_of_azeroth.totalXP, 0.2, 1, 0.6, 0.2, 1, 0.6)
+					GameTooltip:AddLine('Islands Done: '..tostring(alt_data.heart_of_azeroth.weekly), 0.2, 1, 0.6, 0.2, 1, 0.6)
+					else
+						GameTooltip:AddLine('No Heart Data Found', nil, nil, nil, false)
+					end
+					GameTooltip:Show()
 				end
 			end,
 		},
@@ -790,6 +819,19 @@ function AltManager:CreateMenu()
 			currency_function = function(currencies)
 				self.currency_list = self.currency_list or {}
 				self:CreateCurrencyFrame(currencies)
+			end,
+			tooltip = function(currency)
+				return function(self)
+					GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+					if currency.earned and currency.weekly then
+						GameTooltip:AddLine('Details:', nil, nil, nil, false)
+						GameTooltip:AddLine('Weekly: '..currency.earned..'/'..currency.weekly, 0.2, 1, 0.6, 0.2, 1, 0.6)
+						GameTooltip:AddLine('Max: '..currency.total, 0.2, 1, 0.6, 0.2, 1, 0.6)
+					else
+						GameTooltip:AddLine('No Extra information currently saved', nil, nil, nil, false)
+					end
+					GameTooltip:Show()
+				end
 			end,
 		},
 		raid_unroll = {
@@ -832,7 +874,7 @@ function AltManager:CreateLabels(first_render)
 	for row_iden, row in spairs(self.columns_table, function(t, a, b) return t[a].order < t[b].order end) do
 		if row.label then
 			
-			if first_render then 
+			if first_render then
 				local label_row = self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, row.label..":", "RIGHT")
 			end
 			self.main_frame.lowest_point = -(i-1)*font_height
@@ -1090,7 +1132,8 @@ function AltManager:CreateCurrencyFrame(currencies)
 					anchor_frame,
 					-(i - 1) * font_height,
 					tostring(cur.count),
-					"CENTER")
+					"CENTER",
+					self.columns_table.currencies.tooltip and self.columns_table.currencies.tooltip(cur))
 				-- insert it into storage if just created
 				if not self.currency_list.alt_columns[alt].label_columns[i] then
 					self.currency_list.alt_columns[alt].label_columns[i] = current_row
