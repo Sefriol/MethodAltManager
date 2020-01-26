@@ -307,12 +307,56 @@ local function CreateListFrame(parent, w, h, cols)
 	return frame
 end
 
+-------------
+-- Checkbox widget
+-------------
+local function checkboxSetChecked(self) print(self:GetValue());self:SetChecked(self:GetValue()) end
+local function checkboxOnClick(self)
+	local checked = self:GetChecked()
+	PlaySound(checked and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON or SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_OFF)
+	print(checked)
+	self:SetValue(checked)
+end
+
+local function checkboxDisable(self)
+	self.label:SetTextColor(GRAY_FONT_COLOR.r, GRAY_FONT_COLOR.g, GRAY_FONT_COLOR.b)
+end
+
+local function checkboxEnable(self)
+	self.label:SetTextColor(HIGHLIGHT_FONT_COLOR.r, HIGHLIGHT_FONT_COLOR.g, HIGHLIGHT_FONT_COLOR.b)
+end
+
+function newCheckbox(parent, var, label, description)
+	local options = MethodAltManagerDB.options or {}
+	options[var] = options[var] or {["label"]=label, ["description"]=description, ["value"]=true}
+	local check = CreateFrame("CheckButton", "Check" .. label, parent, "InterfaceOptionsCheckButtonTemplate")
+
+	check.var = var
+	check.GetValue = function (self) return options[var].value end 
+	check.SetValue = function (self, value) options[var].value = value;addon:StoreOptions(options) end 
+	check:SetScript('OnShow', checkboxSetChecked)
+	check:SetScript("OnClick", checkboxOnClick)
+	check.label = _G[check:GetName() .. "Text"]
+	check.label:SetText(label)
+	check.tooltipText = label
+	check.tooltipRequirement = description
+
+	check:HookScript('OnDisable', checkboxDisable)
+	check:HookScript('OnEnable', checkboxEnable)
+	return check
+end
+
 local CurrencyVarTable = {}
 
 local MainOptionsPage = CreateFrame('Frame', nil, InterfaceOptionsFramePanelContainer)
 MainOptionsPage:Hide()
 MainOptionsPage:SetAllPoints()
 MainOptionsPage.name = addonName
+
+function addon:MainOptionsInit()
+	local ShowTooltips = newCheckbox(MainOptionsPage, 'tooltips','Enable Tooltips','Whether to show tooltips in the main window when howering over certain items')
+	ShowTooltips:SetPoint("TOPLEFT", MainOptionsPage, "TOPLEFT", 8, -8)
+end
 InterfaceOptions_AddCategory(MainOptionsPage, addonName)
 
 

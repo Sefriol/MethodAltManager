@@ -158,6 +158,7 @@ do
 		end
 		if event == "PLAYER_LOGIN" then
 			AltManager:OnLogin()
+			AltManager:MainOptionsInit()
 			AltManager:MAMO_CURR_INIT()
 			AltManager:MAMO_ITEMS_INIT()
 		end
@@ -236,6 +237,14 @@ function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offse
 		end)
 	end
 	return f
+end
+
+function AltManager:ShowTooltip()
+	if MethodAltManagerDB.options and MethodAltManagerDB.options.tooltips and MethodAltManagerDB.options.tooltips.value then
+		return true
+	else
+		return false
+	end
 end
 
 function AltManager:Keyset()
@@ -637,6 +646,8 @@ function AltManager:CollectData()
 	char_table.guid = UnitGUID('player')
 	char_table.name = name
 	char_table.class = class
+	char_table.faction = UnitFactionGroup("player")
+	char_table.realm = GetRealmName()
 	char_table.ilevel = ilevel
 	char_table.seals = seals
 	char_table.seals_bought = seals_bought
@@ -742,11 +753,11 @@ function AltManager:CreateMenu()
 			color = function(alt_data) return RAID_CLASS_COLORS[alt_data.class] end,
 			tooltip = function(alt_data)
 				return function(self)
+					if AltManager:ShowTooltip() then
 				GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
-				GameTooltip:AddLine("Instructions:", nil, nil, nil, false)
-				GameTooltip:AddLine("1. Write itemID into the box (i.e. a number)", 0.2, 1, 0.6, 0.2, 1, 0.6)
-				GameTooltip:AddLine("2. Save on enter, discard on escape or losing focus. Adding a same ID will remove the item from storage", 0.2, 1, 0.6, 0.2, 1, 0.6)
+						if alt_data.realm then GameTooltip:AddLine("Realm: "..alt_data.realm, 0.2, 1, 0.6, 0.2, 1, 0.6) end
 				GameTooltip:Show()
+				end
 				end
 			end,
 		},
@@ -773,15 +784,17 @@ function AltManager:CreateMenu()
 			end,
 			tooltip = function(alt_data)
 				return function(self)
+					if AltManager:ShowTooltip() then
 					GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
 					if alt_data.heart_of_azeroth then
 					GameTooltip:AddLine('Details:', nil, nil, nil, false)
 					GameTooltip:AddLine('XP: '..alt_data.heart_of_azeroth.xp..'/'..alt_data.heart_of_azeroth.totalXP, 0.2, 1, 0.6, 0.2, 1, 0.6)
-					GameTooltip:AddLine('Islands Done: '..tostring(alt_data.heart_of_azeroth.weekly), 0.2, 1, 0.6, 0.2, 1, 0.6)
+							GameTooltip:AddLine('Islands '.. (alt_data.heart_of_azeroth.weekly and '' or 'not')..' done', 0.2, 1, 0.6, 0.2, 1, 0.6)
 					else
 						GameTooltip:AddLine('No Heart Data Found', nil, nil, nil, false)
 					end
 					GameTooltip:Show()
+				end
 				end
 			end,
 		},
@@ -822,15 +835,17 @@ function AltManager:CreateMenu()
 			end,
 			tooltip = function(currency)
 				return function(self)
+					if AltManager:ShowTooltip() then
 					GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
 					if currency.earned and currency.weekly then
 						GameTooltip:AddLine('Details:', nil, nil, nil, false)
 						GameTooltip:AddLine('Weekly: '..currency.earned..'/'..currency.weekly, 0.2, 1, 0.6, 0.2, 1, 0.6)
-						GameTooltip:AddLine('Max: '..currency.total, 0.2, 1, 0.6, 0.2, 1, 0.6)
+						if currency.total > 0 then GameTooltip:AddLine('Max: '..currency.total, 0.2, 1, 0.6, 0.2, 1, 0.6) end
 					else
 						GameTooltip:AddLine('No Extra information currently saved', nil, nil, nil, false)
 					end
 					GameTooltip:Show()
+				end
 				end
 			end,
 		},
