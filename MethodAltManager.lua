@@ -19,7 +19,7 @@ local per_alt_x = 120
 
 local min_x_size = 300
 
-local min_level = 110
+local min_level = 50
 local name_label = "Name"
 local mythic_done_label = "Highest M+ done"
 local mythic_keystone_label = "Keystone"
@@ -28,7 +28,7 @@ local seals_bought_label = "Seals obtained"
 local azerite_label = "Heart of Azeroth"
 local depleted_label = "Depleted"
 
-local VERSION = "2.0.2"
+local VERSION = "@project-version@"
 
 local favoriteTier = EJ_GetNumTiers()
 
@@ -158,6 +158,7 @@ do
 		end
 		if event == "PLAYER_LOGIN" then
 			AltManager:OnLogin()
+			AltManager:MainOptionsInit()
 			AltManager:MAMO_CURR_INIT()
 			AltManager:MAMO_ITEMS_INIT()
 		end
@@ -165,7 +166,7 @@ do
 			local data = AltManager:CollectData()
 			AltManager:StoreData(data)
 		end
-		if (event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE") and AltManager.addon_loaded then
+		if (event == "BAG_UPDATE_DELAYED" or event == "QUEST_TURNED_IN" or event == "CHAT_MSG_CURRENCY" or event == "CURRENCY_DISPLAY_UPDATE") and (AltManager.addon_loaded and AltManager.player_ready) then
 			local data = AltManager:CollectData()
 			AltManager:StoreData(data)
 		end
@@ -185,7 +186,8 @@ end
 -- because of guid...
 function AltManager:OnLogin()
 	self:GenerateDungeonTable()
-	self.CurrencyTable = self.CurrencyTable or self:GenerateCurrencyTable()
+	self.CurrencyTable = self:GenerateCurrencyTable()
+	self:ValidateSchema()
 	self:ValidateReset()
 	self:StoreData(self:CollectData())
 	
@@ -198,6 +200,7 @@ function AltManager:OnLogin()
 	
 	AltManager:MakeTopBottomTextures(self.main_frame)
 	AltManager:MakeBorder(self.main_frame, 5)
+	self.player_ready = true
 end
 
 function AltManager:OnLoad()
@@ -206,7 +209,6 @@ function AltManager:OnLoad()
 
 	MethodAltManagerDB = MethodAltManagerDB or self:InitDB()
 
-	self.addon_loaded = true
 
 	C_MythicPlus.RequestRewards()
 	C_MythicPlus.RequestCurrentAffixes()
@@ -215,6 +217,7 @@ function AltManager:OnLoad()
 		-- request info in advance
 		C_MythicPlus.RequestMapInfo(k)
 	end
+	self.addon_loaded = true
 end
 
 function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offset, label, justify, tooltip)
@@ -229,7 +232,21 @@ function AltManager:CreateFontFrame(parent, x_size, height, relative_to, y_offse
 	f:GetFontString():SetWidth(120)
 	f:GetFontString():SetHeight(20)
 	f:SetFrameLevel(parent:GetFrameLevel()+2)
+	if tooltip then
+		f:SetScript('OnEnter', tooltip)
+		f:SetScript('OnLeave', function(self)
+			GameTooltip:Hide()
+		end)
+	end
 	return f
+end
+
+function AltManager:ShowTooltip()
+	if MethodAltManagerDB.options and MethodAltManagerDB.options.tooltips and MethodAltManagerDB.options.tooltips.value then
+		return true
+	else
+		return false
+	end
 end
 
 function AltManager:Keyset()
@@ -262,14 +279,14 @@ end
 function AltManager:GenerateCurrencyTable()
 	local tempCurrencyTable = {}
 	for i=1,10000 do
-		local name, currentAmount, texture, earnedThisWeek, weeklyMax, totalMax, isDiscovered, rarity = GetCurrencyInfo(i)
-		if isDiscovered then
+		local currency = C_CurrencyInfo.GetCurrencyInfo(i)
+		if currency and currency.discovered then
 			tempCurrencyTable[i] = {
-				["label"] = name,
-                ["count"] = currentAmount,
-				["earned"] = earnedThisWeek,
-				["weekly"] = weeklyMax,
-				["total"] = totalMax
+				["label"] = currency.name,
+                ["count"] = currency.quantity,
+				["earned"] = currency.quantityEarnedThisWeek,
+				["weekly"] = currency.maxWeeklyQuantity,
+				["total"] = currency.maxQuantity
             }
 		end
 	end
@@ -291,7 +308,7 @@ function filterCurrencies(curr)
 					["total"] = curr[cid].total
 				}
 			else
-				local name, currentAmount, texture, earnedThisWeek, weeklyMax, totalMax, isDiscovered, rarity = GetCurrencyInfo(cid)
+				local name, currentAmount, texture, earnedThisWeek, weeklyMax, totalMax, isDiscovered, rarity = C_CurrencyInfo.GetCurrencyInfo(cid)
 				FilteredList[cid] = {
 				["label"] = name,
 				["order"] = currency_list[cid]["order"],
@@ -363,6 +380,34 @@ function AltManager:GenerateRaidData()
 	raids[favoriteTier] = raidData
 end
 
+function AltManager:ValidateSchema()
+	local db = MethodAltManagerDB
+	if not db then return end
+	if not db.data then return end
+	local keyset = {}
+	for k in pairs(db.data) do
+		table.insert(keyset, k)
+	end
+	for alt = 1, db.alts do
+		local schema_version = db.data[keyset[alt]].version
+		local char_table = db.data[keyset[alt]]
+		if not schema_version then
+			print('MethodAltManager - Old Character Schema found for '..char_table.name..'. Updating')
+			char_table.mplus = {
+				key = {
+					["dungeon"] = char_table.dungeon,
+					["level"] = char_table.level
+				},
+				highest_mplus = char_table.highest_mplus
+			}
+			char_table.dungeon = nil
+			char_table.level = nil
+			char_table.highest_mplus = nil
+			char_table.version = VERSION
+		end
+	end
+end
+
 function AltManager:ValidateReset()
 	local db = MethodAltManagerDB
 	if not db then return end
@@ -379,10 +424,15 @@ function AltManager:ValidateReset()
 		if time() > expiry then
 			-- reset this alt
 			char_table.seals_bought = 0
-			char_table.dungeon = "Unknown"
-			char_table.level = "?"
-			char_table.highest_mplus = 0
-			char_table.is_depleted = false
+			local reward = char_table.mplus.highest_mplus > 0
+			char_table.mplus = {
+				key = {
+					["dungeon"] = "Unknown",
+					["level"] = "?"
+				},
+				highest_mplus = 0,
+				reward = reward
+			}
 			char_table.expires = self:GetNextWeeklyResetTime()
 			char_table.savedins = {}
 			if not char_table.heart_of_azeroth then else
@@ -411,14 +461,11 @@ function AltManager:RemoveCharactersByName(name)
 		db.data[indices[i]] = nil
 	end
 
-	print("Found " .. (#indices) .. " characters by the name of " .. name)
-	print("Please reload ui to update the displayed info.")
-
-	-- things wont be redrawn
+	print("MAM - Found " .. (#indices) .. " characters by the name of " .. name)
+	self:DynamicUIReload()
 end
 
 function AltManager:StoreData(data)
-
 	if not self.addon_loaded then
 		return
 	end
@@ -490,6 +537,7 @@ function AltManager:CollectData()
 	local level = nil
 	local seals = nil
 	local seals_bought = nil
+ 	local mplus = { key = { } }
 	local highest_mplus = 0
 	local depleted = false
 	local items = nil
@@ -513,6 +561,11 @@ function AltManager:CollectData()
 	if l and l > highest_mplus then
 		highest_mplus = l
 	end
+
+	local challengeMapID = C_MythicPlus.GetOwnedKeystoneChallengeMapID()
+	local reward = C_MythicPlus.IsWeeklyRewardAvailable()
+	dungeon = challengeMapID and C_ChallengeMode.GetMapUIInfo(challengeMapID) or "Unknown"
+	level = C_MythicPlus.GetOwnedKeystoneLevel() or '?'
 	
 	-- find keystone
 	local keystone_found = false
@@ -520,7 +573,7 @@ function AltManager:CollectData()
 		local slots = GetContainerNumSlots(container)
 		for slot=1, slots do
 			local _, itemCount, _, _, _, _, slotLink, _, _, slotItemID = GetContainerItemInfo(container, slot)
-			if slotItemID == 158923 then
+			--[[ if slotItemID == 158923 then
 				local itemString = slotLink:match("|Hkeystone:([0-9:]+)|h(%b[])|h")
 				local info = { strsplit(":", itemString) }
 				-- scan tooltip for depleted
@@ -540,15 +593,12 @@ function AltManager:CollectData()
 				if not level then print("MethodAltManager - Parse Failure, please let Qoning know that this happened.") end
 				expire = tonumber(info[4])
 				keystone_found = true
-			elseif items and items[slotItemID] then
+			else ]]
+			if items and items[slotItemID] then
 				items[slotItemID].count = items[slotItemID].count or 0
 				items[slotItemID].count = items[slotItemID].count + itemCount
 			end
 		end
-	end
-	if not keystone_found then
-		dungeon = "Unknown"
-		level = "?"
 	end
 	
 	-- Heart of Azeroth Progress
@@ -561,24 +611,24 @@ function AltManager:CollectData()
 			['lvl'] = C_AzeriteItem.GetPowerLevel(azeriteItemLocation),
 			['xp'] = xp,
 			['totalXP'] = totalLevelXP,
-			['weekly'] = IsQuestFlaggedCompleted(53435) or IsQuestFlaggedCompleted(53436),
+			['weekly'] = C_QuestLog.IsQuestFlaggedCompleted(53435) or C_QuestLog.IsQuestFlaggedCompleted(53436),
 		}
 	end
 
 	-- Process currencies 
 	self.CurrencyTable = self.CurrencyTable or self:GenerateCurrencyTable()
 
-	_, seals = GetCurrencyInfo(1580)
+	_, seals = C_CurrencyInfo.GetCurrencyInfo(1580)
 	
 	seals_bought = 0
 
 	-- Seals - BfA
-	local gold_1 = IsQuestFlaggedCompleted(52834)
-	local gold_2 = IsQuestFlaggedCompleted(52838)
-	local resources_1 = IsQuestFlaggedCompleted(52837)
-	local resources_2 = IsQuestFlaggedCompleted(52840)
-	local marks_1 = IsQuestFlaggedCompleted(52835)
-	local marks_2 = IsQuestFlaggedCompleted(52839)
+	local gold_1 = C_QuestLog.IsQuestFlaggedCompleted(52834)
+	local gold_2 = C_QuestLog.IsQuestFlaggedCompleted(52838)
+	local resources_1 = C_QuestLog.IsQuestFlaggedCompleted(52837)
+	local resources_2 = C_QuestLog.IsQuestFlaggedCompleted(52840)
+	local marks_1 = C_QuestLog.IsQuestFlaggedCompleted(52835)
+	local marks_2 = C_QuestLog.IsQuestFlaggedCompleted(52839)
 
 	if gold_1 then seals_bought = seals_bought + 1 end
 	if gold_2 then seals_bought = seals_bought + 1 end
@@ -610,7 +660,7 @@ function AltManager:CollectData()
 	-- Check BfA World bosses
 	local bfaworldtotal = 0
 	for cid, cobj in pairs(BfAWorldBosses) do
-		bfaworldtotal = IsQuestFlaggedCompleted(cobj) and bfaworldtotal+1 or bfaworldtotal
+		bfaworldtotal = C_QuestLog.IsQuestFlaggedCompleted(cobj) and bfaworldtotal+1 or bfaworldtotal
 	end
 	if (bfaworldtotal > 0) then
 		char_table.savedins["Azeroth"] = char_table.savedins[name] or {}
@@ -631,18 +681,24 @@ function AltManager:CollectData()
 	char_table.guid = UnitGUID('player')
 	char_table.name = name
 	char_table.class = class
+	char_table.faction = UnitFactionGroup("player")
+	char_table.realm = GetRealmName()
 	char_table.ilevel = ilevel
 	char_table.seals = seals
 	char_table.seals_bought = seals_bought
-
-	char_table.dungeon = dungeon
-	char_table.level = level
+	char_table.mplus = {
+		key = {
+			dungeon = dungeon,
+			level = level
+		},
+		reward = reward,
+		highest_mplus = highest_mplus
+	}
 	char_table.heart_of_azeroth = heart_of_azeroth
-	char_table.highest_mplus = highest_mplus
 	char_table.items = items
 	char_table.currencies = self.CurrencyTable
-	char_table.is_depleted = depleted
 	char_table.expires = self:GetNextWeeklyResetTime()
+	char_table.version = VERSION
 	return char_table
 end
 
@@ -680,7 +736,8 @@ function AltManager:PopulateStrings()
 					anchor_frame,
 					-(i - 1) * font_height,
 					column.data(alt_data, i),
-					"CENTER")
+					"CENTER",
+					column.tooltip and column.tooltip(alt_data,i))
 				-- insert it into storage if just created
 				if not self.main_frame.alt_columns[alt].label_columns[i] then
 					self.main_frame.alt_columns[alt].label_columns[i] = current_row
@@ -733,6 +790,15 @@ function AltManager:CreateMenu()
 			label = name_label,
 			data = function(alt_data) return alt_data.name end,
 			color = function(alt_data) return RAID_CLASS_COLORS[alt_data.class] end,
+			tooltip = function(alt_data)
+				return function(self)
+					if AltManager:ShowTooltip() then
+						GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+						if alt_data.realm then GameTooltip:AddLine("Realm: "..alt_data.realm, 0.2, 1, 0.6, 0.2, 1, 0.6) end
+						GameTooltip:Show()
+					end
+				end
+			end,
 		},
 		ilevel = {
 			order = 2,
@@ -755,16 +821,41 @@ function AltManager:CreateMenu()
 					return tostring(alt_data.heart_of_azeroth.lvl) .. " (" .. tostring(alt_data.heart_of_azeroth.xp/alt_data.heart_of_azeroth.totalXP*100):gsub('(%-?%d+)%.%d+','%1') .. "%)"
 				end
 			end,
+			tooltip = function(alt_data)
+				return function(self)
+					if AltManager:ShowTooltip() then
+						GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+						if alt_data.heart_of_azeroth then
+							GameTooltip:AddLine('Details:', nil, nil, nil, false)
+							GameTooltip:AddLine('XP: '..alt_data.heart_of_azeroth.xp..'/'..alt_data.heart_of_azeroth.totalXP, 0.2, 1, 0.6, 0.2, 1, 0.6)
+							GameTooltip:AddLine('Islands '.. (alt_data.heart_of_azeroth.weekly and '' or 'not')..' done', 0.2, 1, 0.6, 0.2, 1, 0.6)
+						else
+							GameTooltip:AddLine('No Heart Data Found', nil, nil, nil, false)
+						end
+						GameTooltip:Show()
+					end
+				end
+			end,
 		},
 		mplus = {
 			order = 4,
 			label = mythic_done_label,
-			data = function(alt_data) return tostring(alt_data.highest_mplus) end, 
+			data = function(alt_data) return tostring(alt_data.mplus.highest_mplus) end,
+			color = function(alt_data) return alt_data.mplus.reward and {r=230, g=128, b=0} or {r=255, g=255, b=255} end, 
+			tooltip = function(alt_data)
+				return function(self)
+					if AltManager:ShowTooltip() then
+						GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+						if alt_data.mplus.reward then GameTooltip:AddLine('Weekly Chest available', 0.2, 1, 0.6, 0.2, 1, 0.6) end
+						GameTooltip:Show()
+					end
+				end
+			end,
 		},
 		keystone = {
 			order = 5,
 			label = mythic_keystone_label,
-			data = function(alt_data) local depleted_string = alt_data.is_depleted and " (D)" or ""; return (dungeons[alt_data.dungeon] or alt_data.dungeon) .. " +" .. tostring(alt_data.level) .. depleted_string; end,
+			data = function(alt_data) return (dungeons[alt_data.mplus.key.dungeon] or alt_data.mplus.key.dungeon) .. " +" .. tostring(alt_data.mplus.key.level); end,
 		},
 		seals_owned = {
 			order = 6,
@@ -790,6 +881,21 @@ function AltManager:CreateMenu()
 			currency_function = function(currencies)
 				self.currency_list = self.currency_list or {}
 				self:CreateCurrencyFrame(currencies)
+			end,
+			tooltip = function(currency)
+				return function(self)
+					if AltManager:ShowTooltip() then
+						GameTooltip:SetOwner(self, "ANCHOR_TOPLEFT")
+						if currency.earned and currency.weekly then
+							GameTooltip:AddLine('Details:', nil, nil, nil, false)
+							GameTooltip:AddLine('Weekly: '..currency.earned..'/'..currency.weekly, 0.2, 1, 0.6, 0.2, 1, 0.6)
+							if currency.total > 0 then GameTooltip:AddLine('Max: '..currency.total, 0.2, 1, 0.6, 0.2, 1, 0.6) end
+						else
+							GameTooltip:AddLine('No Extra information currently saved', nil, nil, nil, false)
+						end
+						GameTooltip:Show()
+					end
+				end
 			end,
 		},
 		raid_unroll = {
@@ -832,7 +938,7 @@ function AltManager:CreateLabels(first_render)
 	for row_iden, row in spairs(self.columns_table, function(t, a, b) return t[a].order < t[b].order end) do
 		if row.label then
 			
-			if first_render then 
+			if first_render then
 				local label_row = self:CreateFontFrame(self.main_frame, per_alt_x, font_height, label_column, -(i-1)*font_height, row.label..":", "RIGHT")
 			end
 			self.main_frame.lowest_point = -(i-1)*font_height
@@ -1090,7 +1196,8 @@ function AltManager:CreateCurrencyFrame(currencies)
 					anchor_frame,
 					-(i - 1) * font_height,
 					tostring(cur.count),
-					"CENTER")
+					"CENTER",
+					self.columns_table.currencies.tooltip and self.columns_table.currencies.tooltip(cur))
 				-- insert it into storage if just created
 				if not self.currency_list.alt_columns[alt].label_columns[i] then
 					self.currency_list.alt_columns[alt].label_columns[i] = current_row
@@ -1414,7 +1521,7 @@ function AltManager:GetNextDailyResetTime()
 end
 
 function AltManager:GetServerOffset()
-	local serverDay = C_Calendar.GetDate()['weekday'] - 1 -- 1-based starts on Sun
+	local serverDay = C_DateAndTime.GetCurrentCalendarTime()['weekday'] - 1 -- 1-based starts on Sun
 	local localDay = tonumber(date("%w")) -- 0-based starts on Sun
 	local serverHour, serverMinute = GetGameTime()
 	local localHour, localMinute = tonumber(date("%H")), tonumber(date("%M"))
